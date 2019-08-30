@@ -94,7 +94,7 @@ ORBextractor.nFeatures: 1200
 ORBextractor.scaleFactor: 1.2
 
 # ORB Extractor: Number of levels in the scale pyramid	
-ORBextractor.nLevels: 8
+ORBextractor.nLevels: 12
 
 # ORB Extractor: Fast threshold
 # Image is divided in a grid. At each cell FAST are extracted imposing a minimum response.
@@ -102,18 +102,4 @@ ORBextractor.nLevels: 8
 # You can lower these values if your images have low contrast			
 ORBextractor.iniThFAST: 20
 ORBextractor.minThFAST: 7
-
-#--------------------------------------------------------------------------------------------
-# Viewer Parameters
-#--------------------------------------------------------------------------------------------
-# Viewer.KeyFrameSize: 0.05
-# Viewer.KeyFrameLineWidth: 1
-# Viewer.GraphLineWidth: 0.9
-# Viewer.PointSize: 2
-# Viewer.CameraSize: 0.08
-# Viewer.CameraLineWidth: 3
-# Viewer.ViewpointX: 0
-# Viewer.ViewpointY: -0.7
-# Viewer.ViewpointZ: -1.8
-# Viewer.ViewpointF: 500
 

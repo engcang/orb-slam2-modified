@@ -162,14 +162,14 @@ int main(int argc, char **argv)
         else
             Tcw = SLAM.TrackStereo(imLeft,imRight,tframe);
 
-        cv::Mat rotation(3,3,CV_32F);
-        cv::Mat translation(3,1,CV_32F);
+        if (Tcw.size().height>0 && Tcw.size().width >0){
+            cv::Mat rotation(3,3,CV_32F);
+            cv::Mat translation(3,1,CV_32F);
 
-        rotation = Tcw.rowRange(0,3).colRange(0,3).t();
-        translation = -rotation*Tcw.rowRange(0,3).col(3);
-        vector<float> q = ORB_SLAM2::Converter::toQuaternion(rotation);
-        cout << "E,D,N" << translation.at<float>(0) << " " << translation.at<float>(1) << " " << translation.at<float>(2) << " " << q[0] << " " << q[1] << " " << q[2] << " " << q[3] << endl;
-
+            rotation = Tcw.rowRange(0,3).colRange(0,3).t();
+            translation = -rotation*Tcw.rowRange(0,3).col(3);
+            vector<float> q = ORB_SLAM2::Converter::toQuaternion(rotation);
+            cout << "E,D,N" << translation.at<float>(0) << " " << translation.at<float>(1) << " " << translation.at<float>(2) << " " << q[0] << " " << q[1] << " " << q[2] << " " << q[3] << endl; }
 
 #ifdef COMPILEDWITHC11
         std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
