@@ -1,6 +1,7 @@
-#### Removing Pangolin
+### Removed Pangolin
 ### used speed-up vocabulary from [here](https://github.com/raulmur/ORB_SLAM2/pull/21)
-<br><br><br>
+<br><br><br><br><br><br><br><br><br>
+
 
 
 

@@ -27,6 +27,7 @@
 
 #include<Eigen/Dense>
 #include<opencv2/core/core.hpp>
+#include <opencv2/core/eigen.hpp>
 
 #include"System.h"
 #include"Converter.h"
@@ -36,6 +37,7 @@ using namespace std;
 // void LoadImages(const string &strPathLeft, const string &strPathRight, const string &strPathTimes,
 //                 vector<string> &vstrImageLeft, vector<string> &vstrImageRight, vector<double> &vTimeStamps);
 void LoadImages(const string &strPathLeft, const string &strPathTimes, vector<string> &vstrImageLeft, vector<double> &vTimeStamps);
+Eigen::Vector3d R2ypr(const Eigen::Matrix3d &R);
 
 int main(int argc, char **argv)
 {
@@ -169,7 +171,8 @@ int main(int argc, char **argv)
             rotation = Tcw.rowRange(0,3).colRange(0,3).t();
             translation = -rotation*Tcw.rowRange(0,3).col(3);
             vector<float> q = ORB_SLAM2::Converter::toQuaternion(rotation);
-            cout << "E,D,N" << translation.at<float>(0) << " " << translation.at<float>(1) << " " << translation.at<float>(2) << " " << q[0] << " " << q[1] << " " << q[2] << " " << q[3] << endl; }
+
+            cout << "E,D,N " << translation.at<float>(0) << " " << translation.at<float>(1) << " " << translation.at<float>(2) << " " << q[0] << " " << q[1] << " " << q[2] << " " << q[3] << endl; }
 
 #ifdef COMPILEDWITHC11
         std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
@@ -235,4 +238,21 @@ void LoadImages(const string &strPathLeft, const string &strPathTimes,
             vTimeStamps.push_back(t/1e9);
         }
     }
+}
+
+Eigen::Vector3d R2ypr(const Eigen::Matrix3d &R)
+{
+    Eigen::Vector3d n = R.col(0);
+    Eigen::Vector3d o = R.col(1);
+    Eigen::Vector3d a = R.col(2);
+
+    Eigen::Vector3d ypr(3);
+    double y = atan2(n(1), n(0));
+    double p = atan2(-n(2), n(0) * cos(y) + n(1) * sin(y));
+    double r = atan2(a(0) * sin(y) - a(1) * cos(y), -o(0) * sin(y) + o(1) * cos(y));
+    ypr(0) = y;
+    ypr(1) = p;
+    ypr(2) = r;
+
+    return ypr / M_PI * 180.0;
 }
