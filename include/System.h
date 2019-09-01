@@ -30,7 +30,7 @@
 #include "FrameDrawer.h"
 #include "Map.h"
 #include "LocalMapping.h"
-#include "LoopClosing.h"
+// #include "LoopClosing.h"
 #include "KeyFrameDatabase.h"
 #include "ORBVocabulary.h"
 #include "Viewer.h"
