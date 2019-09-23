@@ -54,6 +54,12 @@
 #include <opencv2/core/core.hpp>
 #include "MapPoint.h"
 #include "Frame.h"
+#include "Thirdparty/DBoW2/DUtils/Random.h"
+
+#include <vector>
+#include <cmath>
+#include <algorithm>
+#include <iostream>
 
 namespace ORB_SLAM2
 {

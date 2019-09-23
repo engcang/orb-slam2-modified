@@ -19,9 +19,6 @@
 */
 
 #include "KeyFrame.h"
-#include "Converter.h"
-#include "ORBmatcher.h"
-#include<mutex>
 
 namespace ORB_SLAM2
 {

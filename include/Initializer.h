@@ -20,9 +20,12 @@
 #ifndef INITIALIZER_H
 #define INITIALIZER_H
 
-#include<opencv2/opencv.hpp>
+#include <thread>
+#include <opencv2/opencv.hpp>
 #include "Frame.h"
-
+#include "Thirdparty/DBoW2/DUtils/Random.h"
+#include "Optimizer.h"
+#include "ORBmatcher.h"
 
 namespace ORB_SLAM2
 {

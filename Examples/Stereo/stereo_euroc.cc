@@ -27,7 +27,7 @@
 
 #include<Eigen/Dense>
 #include<opencv2/core/core.hpp>
-#include <opencv2/core/eigen.hpp>
+#include<opencv2/core/eigen.hpp>
 
 #include"System.h"
 #include"Converter.h"
@@ -112,7 +112,8 @@ int main(int argc, char **argv)
     const int nImages = (vstrImageLeft.size()>vstrImageRight.size())?vstrImageRight.size():vstrImageLeft.size();
 
     // Create SLAM system. It initializes all system threads and gets ready to process frames.
-    ORB_SLAM2::System SLAM(argv[1],argv[2],ORB_SLAM2::System::STEREO,true);
+    // ORB_SLAM2::System SLAM(argv[1],argv[2],ORB_SLAM2::System::STEREO,true);
+    ORB_SLAM2::System SLAM(argv[1],argv[2],ORB_SLAM2::System::STEREO); //viewer removed
 
     // Vector for tracking time statistics
     vector<float> vTimesTrack;
@@ -125,6 +126,8 @@ int main(int argc, char **argv)
     // Main loop
     cv::Mat imLeft, imRight, imLeftRect, imRightRect;
     cv::Mat Tcw;
+
+    int ShowTrack = fsSettings["ShowTrack"]; // viewer removed
 
     for(int ni=0; ni<nImages; ni++)
     {
@@ -173,6 +176,11 @@ int main(int argc, char **argv)
             vector<float> q = ORB_SLAM2::Converter::toQuaternion(rotation);
 
             cout << "E,D,N " << translation.at<float>(0) << " " << translation.at<float>(1) << " " << translation.at<float>(2) << " " << q[0] << " " << q[1] << " " << q[2] << " " << q[3] << endl; }
+        if(ShowTrack) // Extracted from viewer
+        {   cv::namedWindow("ORB-SLAM2: Current Frame");
+            cv::Mat im = SLAM.getimage();
+            cv::imshow("ORB-SLAM2: Current Frame",im);
+            cv::waitKey(1);}
 
 #ifdef COMPILEDWITHC11
         std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();

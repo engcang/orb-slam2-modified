@@ -24,10 +24,7 @@
 #include "MapPoint.h"
 #include "KeyFrame.h"
 #include <set>
-
 #include <mutex>
-
-
 
 namespace ORB_SLAM2
 {

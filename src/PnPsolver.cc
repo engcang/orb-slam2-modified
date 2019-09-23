@@ -48,18 +48,9 @@
 *   either expressed or implied, of the FreeBSD Project
 */
 
-#include <iostream>
-
 #include "PnPsolver.h"
 
-#include <vector>
-#include <cmath>
-#include <opencv2/core/core.hpp>
-#include "Thirdparty/DBoW2/DUtils/Random.h"
-#include <algorithm>
-
 using namespace std;
-
 namespace ORB_SLAM2
 {
 

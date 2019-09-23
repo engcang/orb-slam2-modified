@@ -18,17 +18,22 @@
 * along with ORB-SLAM2. If not, see <http://www.gnu.org/licenses/>.
 */
 
+
 #ifndef LOCALMAPPING_H
 #define LOCALMAPPING_H
 
 #include "KeyFrame.h"
 #include "Map.h"
-// #include "LoopClosing.h"
 #include "Tracking.h"
 #include "KeyFrameDatabase.h"
-
+#include "ORBmatcher.h"
+#include "Optimizer.h"
 #include <mutex>
-
+//Pthread, shced Added by Local-Ryu (CPU affinity)
+#include <pthread.h>
+#include <sched.h>
+// Loopclosing and Pangolin removed by Mason EungChang Lee
+// #include "LoopClosing.h"
 
 namespace ORB_SLAM2
 {
@@ -36,10 +41,10 @@ namespace ORB_SLAM2
 class Tracking;
 // class LoopClosing;
 class Map;
-
 class LocalMapping
 {
 public:
+    // LocalMapping(Map* pMap, const float bMonocular, FrameDrawer* pFrameDrawer, const string &strSettingPath);
     LocalMapping(Map* pMap, const float bMonocular);
 
     // void SetLoopCloser(LoopClosing* pLoopCloser);
@@ -121,6 +126,7 @@ protected:
 
     bool mbAcceptKeyFrames;
     std::mutex mMutexAccept;
+    
 };
 
 } //namespace ORB_SLAM

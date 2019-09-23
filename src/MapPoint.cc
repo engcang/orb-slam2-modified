@@ -19,9 +19,6 @@
 */
 
 #include "MapPoint.h"
-#include "ORBmatcher.h"
-
-#include <mutex>
 
 namespace ORB_SLAM2
 {

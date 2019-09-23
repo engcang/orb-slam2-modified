@@ -22,10 +22,14 @@
 #ifndef SIM3SOLVER_H
 #define SIM3SOLVER_H
 
+#include <opencv2/core/core.hpp>
 #include <opencv2/opencv.hpp>
 #include <vector>
+#include <cmath>
 
 #include "KeyFrame.h"
+#include "ORBmatcher.h"
+#include "Thirdparty/DBoW2/DUtils/Random.h"
 
 
 

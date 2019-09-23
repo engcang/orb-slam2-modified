@@ -24,13 +24,12 @@
 #include <vector>
 #include <list>
 #include <set>
+#include<mutex>
 
+#include "Thirdparty/DBoW2/DBoW2/BowVector.h"
 #include "KeyFrame.h"
 #include "Frame.h"
 #include "ORBVocabulary.h"
-
-#include<mutex>
-
 
 namespace ORB_SLAM2
 {
