@@ -1,5 +1,8 @@
 ### Removed Pangolin
+### Removed Viewer (to reduce thread) -> merged into system and main code (e.g. stereo_euroc.cc)
 ### used speed-up vocabulary from [here](https://github.com/raulmur/ORB_SLAM2/pull/21)
+### CPU affinity is added by **Local-Ryu** to allocate the threads to wanted CPU cores (System.cc, LocalMapping.cc and LoopClosing.cc)
+-> change mask at LocalMapping::Run(), Loopclosing::Run() functions to allocate threads to wanted CPU
 <br><br><br><br><br><br><br><br><br>
 
 

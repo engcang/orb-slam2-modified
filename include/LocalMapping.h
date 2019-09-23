@@ -26,6 +26,9 @@
 #include "LoopClosing.h"
 #include "Tracking.h"
 #include "KeyFrameDatabase.h"
+//Pthread, shced Added by Local-Ryu (CPU affinity)
+#include <pthread.h>
+#include <sched.h>
 
 #include <mutex>
 

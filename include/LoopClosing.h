@@ -33,6 +33,10 @@
 #include <mutex>
 #include "Thirdparty/g2o/g2o/types/types_seven_dof_expmap.h"
 
+//Pthread, shced Added by Local-Ryu (CPU affinity)
+#include <pthread.h>
+#include <sched.h>
+
 namespace ORB_SLAM2
 {
 

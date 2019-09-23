@@ -25,7 +25,7 @@
 #include<opencv2/core/core.hpp>
 #include<opencv2/features2d/features2d.hpp>
 
-#include"Viewer.h"
+// #include"Viewer.h"
 #include"FrameDrawer.h"
 #include"Map.h"
 #include"LocalMapping.h"
@@ -43,7 +43,7 @@
 namespace ORB_SLAM2
 {
 
-class Viewer;
+// class Viewer;
 class FrameDrawer;
 class Map;
 class LocalMapping;
@@ -66,7 +66,7 @@ public:
 
     void SetLocalMapper(LocalMapping* pLocalMapper);
     void SetLoopClosing(LoopClosing* pLoopClosing);
-    void SetViewer(Viewer* pViewer);
+    // void SetViewer(Viewer* pViewer);
 
     // Load new settings
     // The focal lenght should be similar or scale prediction will fail when projecting points
@@ -176,7 +176,7 @@ protected:
     System* mpSystem;
     
     //Drawers
-    Viewer* mpViewer;
+    // Viewer* mpViewer;
     FrameDrawer* mpFrameDrawer;
     // MapDrawer* mpMapDrawer;
 

@@ -47,6 +47,14 @@ void LocalMapping::SetTracker(Tracking *pTracker)
 void LocalMapping::Run()
 {
 
+    //ryu - CPU affinity
+    unsigned long mask = 240; //(b1111 0000)
+    if(pthread_setaffinity_np(pthread_self(),sizeof(mask),(cpu_set_t*)&mask) < 0){
+        std::cout << "setaffinity_np error" << std::endl;
+        //abort();
+    }
+    else {std::cout << "cpu : " << sched_getcpu() << std::endl;}
+    
     mbFinished = false;
 
     while(1)
