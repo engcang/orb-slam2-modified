@@ -510,4 +510,8 @@ cv::Mat System::getimage() //added to replace viewer
     return mpFrameDrawer->DrawFrame();
 }
 
+cv::Mat System::getvel(){  //added to use for Kalman filter by EungChang
+    return mpTracker->getvel();
+}
+
 } //namespace ORB_SLAM

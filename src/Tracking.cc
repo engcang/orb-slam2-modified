@@ -472,8 +472,7 @@ void Tracking::Track()
             {
                 cout << "Track lost. reset and start again with offset from the last Position." << endl;
                 mLastFrame = Frame(mCurrentFrame);
-                mpSystem->Reset();
-                mLastFrame = Frame(mCurrentFrame);
+                // mpSystem->Reset();
                 return;
             }
         }
@@ -1585,6 +1584,8 @@ void Tracking::InformOnlyTracking(const bool &flag)
     mbOnlyTracking = flag;
 }
 
-
+cv::Mat Tracking::getvel(){  //added to use for Kalman filter by EungChang
+    return mVelocity;
+}
 
 } //namespace ORB_SLAM

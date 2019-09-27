@@ -1,9 +1,11 @@
 ### Removed Pangolin
 ### Removed Loop-closure (to reduce thread)
-### Removed Viewer (to reduce thread) -> merged into system and main code (e.g. stereo_euroc.cc)
+### Removed Viewer (to reduce thread) -> merged into system and main code (e.g. stereo_euroc.cc) -> System::getimage();
 ### used speed-up vocabulary from [here](https://github.com/raulmur/ORB_SLAM2/pull/21) 
+### System::getvel(); function -> get first estimation of velocities of rotation and translation directions to use Kalman filter (already existed values)
 ### CPU affinity is added by **Local-Ryu** to allocate the threads to wanted CPU cores (System.cc and LocalMapping.cc + Frame.cc (Updated))
--> change **mask** at LocalMapping::Run() function to allocate threads to wanted CPU
+-> change **mask** at LocalMapping::Run() function to allocate threads to wanted CPU <br>
+-> change **mask** at Frame::ExtractORB() : only for Stereo
     
 <br><br><br><br><br><br><br><br><br>
 

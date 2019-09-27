@@ -120,6 +120,7 @@ public:
     bool mbOnlyTracking;
 
     void Reset();
+    cv::Mat getvel(); // added to use for Kalman filter by EungChang
 
 protected:
 
