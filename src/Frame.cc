@@ -20,6 +20,10 @@
 
 #include "Frame.h"
 
+
+//CPU Affinity added by Local-Ryu at ExtractORB funciton.
+
+
 namespace ORB_SLAM2
 {
 
@@ -243,10 +247,18 @@ void Frame::AssignFeaturesToGrid()
 
 void Frame::ExtractORB(int flag, const cv::Mat &im)
 {
+    //ryu - CPU affinity
+    unsigned long mask = 240; //(b1111 0000)
+    if(pthread_setaffinity_np(pthread_self(),sizeof(mask),(cpu_set_t*)&mask) < 0){
+        std::cout << "setaffinity_np error" << std::endl;
+        //abort();
+    }
+    // else {std::cout << "cpu : " << sched_getcpu() << std::endl;}
+
     if(flag==0)
-        (*mpORBextractorLeft)(im,cv::Mat(),mvKeys,mDescriptors);
+        {(*mpORBextractorLeft)(im,cv::Mat(),mvKeys,mDescriptors);}
     else
-        (*mpORBextractorRight)(im,cv::Mat(),mvKeysRight,mDescriptorsRight);
+        {(*mpORBextractorRight)(im,cv::Mat(),mvKeysRight,mDescriptorsRight);}
 }
 
 void Frame::SetPose(cv::Mat Tcw)

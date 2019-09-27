@@ -20,6 +20,10 @@
 
 #include "LocalMapping.h"
 
+
+//CPU Affinity added by Local-Ryu at ExtractORB funciton.
+
+
 namespace ORB_SLAM2
 {
 
@@ -47,7 +51,7 @@ void LocalMapping::Run()
         std::cout << "setaffinity_np error" << std::endl;
         //abort();
     }
-    else {std::cout << "cpu : " << sched_getcpu() << std::endl;}
+    else {std::cout << "LocalMapping cpu : " << sched_getcpu() << std::endl;}
 
     mbFinished = false;
 

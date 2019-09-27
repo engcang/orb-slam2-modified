@@ -468,6 +468,14 @@ void Tracking::Track()
                 mpSystem->Reset();
                 return;
             }
+            else // added, resilient logic. Save and use the latest position as offset. // by EungChang.
+            {
+                cout << "Track lost. reset and start again with offset from the last Position." << endl;
+                mLastFrame = Frame(mCurrentFrame);
+                mpSystem->Reset();
+                mLastFrame = Frame(mCurrentFrame);
+                return;
+            }
         }
 
         if(!mCurrentFrame.mpReferenceKF)
