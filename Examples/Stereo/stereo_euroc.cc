@@ -182,7 +182,7 @@ int main(int argc, char **argv)
             cv::imshow("ORB-SLAM2: Current Frame",im);
             cv::waitKey(1);}
             cv::Mat vel = SLAM.getvel();
-            cout << vel << endl;
+            // cout << vel << endl;
 
 
 #ifdef COMPILEDWITHC11
