@@ -1594,6 +1594,9 @@ void Tracking::InformOnlyTracking(const bool &flag)
     mbOnlyTracking = flag;
 }
 
+cv::Mat Tracking::getvel(){  //added to use for Kalman filter by EungChang
+    return mVelocity;
+}
 
 
 } //namespace ORB_SLAM

@@ -123,8 +123,9 @@ public:
     std::vector<MapPoint*> GetTrackedMapPoints();
     std::vector<cv::KeyPoint> GetTrackedKeyPointsUn();
 
-    cv::Mat getimage(); //added to remove viewer
-
+    cv::Mat getimage(); //added to remove viewer by EungChang
+    cv::Mat getvel(); // added to use for Kalman filter by EungChang
+    
 private:
 
     // Input sensor

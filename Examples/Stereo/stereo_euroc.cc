@@ -182,6 +182,8 @@ int main(int argc, char **argv)
             cv::Mat im = SLAM.getimage();
             cv::imshow("ORB-SLAM2: Current Frame",im);
             cv::waitKey(1);}
+            cv::Mat vel = SLAM.getvel();
+            // cout << vel << endl;
 
 #ifdef COMPILEDWITHC11
         std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
