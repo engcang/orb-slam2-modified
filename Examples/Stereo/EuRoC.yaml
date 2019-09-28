@@ -5,7 +5,8 @@
 #--------------------------------------------------------------------------------------------
 
 ShowTrack: 1 # show image
-
+fisheye : 1
+fisheye_mask : "/home/hcshim/Desktop/fisheye_mask.png"
 # Camera calibration and distortion parameters (OpenCV) 
 Camera.fx: 435.2046959714599
 Camera.fy: 435.2046959714599
