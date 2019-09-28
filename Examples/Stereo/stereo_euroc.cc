@@ -37,7 +37,6 @@ using namespace std;
 // void LoadImages(const string &strPathLeft, const string &strPathRight, const string &strPathTimes,
 //                 vector<string> &vstrImageLeft, vector<string> &vstrImageRight, vector<double> &vTimeStamps);
 void LoadImages(const string &strPathLeft, const string &strPathTimes, vector<string> &vstrImageLeft, vector<double> &vTimeStamps);
-Eigen::Vector3d R2ypr(const Eigen::Matrix3d &R);
 
 int main(int argc, char **argv)
 {
@@ -124,10 +123,17 @@ int main(int argc, char **argv)
     cout << "Images in the sequence: " << nImages << endl << endl;
 
     // Main loop
-    cv::Mat imLeft, imRight, imLeftRect, imRightRect;
+    cv::Mat imLeft, imRight, imLeftRect, imRightRect, masked_left, masked_right;
     cv::Mat Tcw;
 
     int ShowTrack = fsSettings["ShowTrack"]; // viewer removed
+    int fisheye = fsSettings["fisheye"]; // fisheye added by EungChang
+    cv::Mat mask;
+    if (fisheye)
+        {
+            mask = cv::imread(fsSettings["fisheye_mask"],0);
+         // cv::resize(mask, mask, cv::Size(752, 480));
+        }
 
     for(int ni=0; ni<nImages; ni++)
     {
@@ -162,10 +168,27 @@ int main(int argc, char **argv)
 #endif
 
         // Pass the images to the SLAM system
-        if(Rectification)
-            Tcw = SLAM.TrackStereo(imLeftRect,imRightRect,tframe);
-        else
-            Tcw = SLAM.TrackStereo(imLeft,imRight,tframe);
+        if(Rectification){
+            if (fisheye)
+            {
+                imLeftRect.copyTo(masked_left,mask);
+                imRightRect.copyTo(masked_right,mask);
+                Tcw = SLAM.TrackStereo(masked_left,masked_right,tframe);
+            }
+            else
+                Tcw = SLAM.TrackStereo(imLeftRect,imRightRect,tframe);
+        }
+        else{
+            if (fisheye)
+            {
+                imLeft.copyTo(masked_left,mask);
+                imRight.copyTo(masked_right,mask);
+                Tcw = SLAM.TrackStereo(masked_left,masked_right,tframe);
+            }
+            else
+                Tcw = SLAM.TrackStereo(imLeft,imRight,tframe);
+            
+        }
 
         if (Tcw.size().height>0 && Tcw.size().width >0){
             cv::Mat rotation(3,3,CV_32F);
@@ -249,21 +272,4 @@ void LoadImages(const string &strPathLeft, const string &strPathTimes,
             vTimeStamps.push_back(t/1e9);
         }
     }
-}
-
-Eigen::Vector3d R2ypr(const Eigen::Matrix3d &R)
-{
-    Eigen::Vector3d n = R.col(0);
-    Eigen::Vector3d o = R.col(1);
-    Eigen::Vector3d a = R.col(2);
-
-    Eigen::Vector3d ypr(3);
-    double y = atan2(n(1), n(0));
-    double p = atan2(-n(2), n(0) * cos(y) + n(1) * sin(y));
-    double r = atan2(a(0) * sin(y) - a(1) * cos(y), -o(0) * sin(y) + o(1) * cos(y));
-    ypr(0) = y;
-    ypr(1) = p;
-    ypr(2) = r;
-
-    return ypr / M_PI * 180.0;
 }

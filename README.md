@@ -5,8 +5,8 @@
 ### CPU affinity is added by **Local-Ryu** to allocate the threads to wanted CPU cores (System.cc and LocalMapping.cc + Frame.cc (Updated))
 -> change **mask** at LocalMapping::Run() function to allocate threads to wanted CPU <br>
 -> change **mask** at Frame::ExtractORB() : only for Stereo
-
-
+### Fisheye mask added (see stereo_euroc.cc)
+<br><br><br><br><br>
 
 
 # ORB-SLAM2 : [here](https://github.com/raulmur/ORB_SLAM2)
