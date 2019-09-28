@@ -181,8 +181,7 @@ int main(int argc, char **argv)
             cv::Mat im = SLAM.getimage();
             cv::imshow("ORB-SLAM2: Current Frame",im);
             cv::waitKey(1);}
-            cv::Mat vel = SLAM.getvel();
-            // cout << vel << endl;
+            //cv::Mat vel = SLAM.getvel();
 
 
 #ifdef COMPILEDWITHC11
@@ -193,6 +192,7 @@ int main(int argc, char **argv)
 
         double ttrack= std::chrono::duration_cast<std::chrono::duration<double> >(t2 - t1).count();
 
+
         vTimesTrack[ni]=ttrack;
 
         // Wait to load the next frame
@@ -202,8 +202,8 @@ int main(int argc, char **argv)
         else if(ni>0)
             T = tframe-vTimeStamp[ni-1];
 
-        if(ttrack<T)
-            usleep((T-ttrack)*1e6);
+        // if(ttrack<T)
+            // usleep((T-ttrack)*1e6);
     }
 
     // Stop all threads
