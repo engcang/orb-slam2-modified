@@ -30,7 +30,6 @@
 #include "FrameDrawer.h"
 #include "Map.h"
 #include "LocalMapping.h"
-#include "LoopClosing.h"
 #include "KeyFrameDatabase.h"
 #include "ORBVocabulary.h"
 #include <unistd.h> // added for 18.04, to use usleep
@@ -44,7 +43,6 @@ class FrameDrawer;
 class Map;
 class Tracking;
 class LocalMapping;
-class LoopClosing;
 
 class System
 {
@@ -147,7 +145,7 @@ private:
 
     // Loop Closer. It searches loops with every new keyframe. If there is a loop it performs
     // a pose graph optimization and full bundle adjustment (in a new thread) afterwards.
-    LoopClosing* mpLoopCloser;
+//    LoopClosing* mpLoopCloser;
 
     // The viewer draws the map and the current camera pose. It uses Pangolin.
 
@@ -156,7 +154,7 @@ private:
     // System threads: Local Mapping, Loop Closing, Viewer.
     // The Tracking thread "lives" in the main execution thread that creates the System object.
     std::thread* mptLocalMapping;
-    std::thread* mptLoopClosing;
+//    std::thread* mptLoopClosing;
 
     // Reset flag
     std::mutex mMutexReset;

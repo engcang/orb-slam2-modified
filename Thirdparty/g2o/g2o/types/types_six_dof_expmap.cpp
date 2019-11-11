@@ -100,7 +100,7 @@ bool EdgeSE3ProjectXYZ::write(std::ostream& os) const {
 }
 
 
-void EdgeSE3ProjectXYZ::linearizeOplus() {
+/*void EdgeSE3ProjectXYZ::linearizeOplus() {
   VertexSE3Expmap * vj = static_cast<VertexSE3Expmap *>(_vertices[1]);
   SE3Quat T(vj->estimate());
   VertexSBAPointXYZ* vi = static_cast<VertexSBAPointXYZ*>(_vertices[0]);
@@ -110,8 +110,8 @@ void EdgeSE3ProjectXYZ::linearizeOplus() {
   double x = xyz_trans[0];
   double y = xyz_trans[1];
   double z = xyz_trans[2];
-  double z_2 = z*z;
-
+  double z_2 = z*z; 
+  
   Matrix<double,2,3> tmp;
   tmp(0,0) = fx;
   tmp(0,1) = 0;
@@ -136,11 +136,66 @@ void EdgeSE3ProjectXYZ::linearizeOplus() {
   _jacobianOplusXj(1,3) = 0;
   _jacobianOplusXj(1,4) = -1./z *fy;
   _jacobianOplusXj(1,5) = y/z_2 *fy;
+}*/
+
+void EdgeSE3ProjectXYZ::linearizeOplus() {
+  VertexSE3Expmap * vj = static_cast<VertexSE3Expmap *>(_vertices[1]);
+  SE3Quat T(vj->estimate());
+  VertexSBAPointXYZ* vi = static_cast<VertexSBAPointXYZ*>(_vertices[0]);
+  Vector3d xyz = vi->estimate();
+  Vector3d xyz_trans = T.map(xyz);
+
+  double x = xyz_trans[0];
+  double y = xyz_trans[1];
+  double z = xyz_trans[2];
+  double x_2 = x*x;
+  double y_2 = y*y;
+  double z_2 = z*z;
+
+  double rho = sqrt( beta*(x_2+y_2)+z_2 );
+  double eta = (1-alpha)*z + alpha*rho;
+  double eta_2 = eta*eta;
+  
+  Matrix<double,2,3> tmp;
+  tmp(0,0) = fx * ( -1/eta + (alpha*beta*x_2) / (eta_2*rho) );
+  tmp(0,1) = fx * (alpha*beta*x*y) / (eta_2*rho);
+  tmp(0,2) = fx * x * ( 1-alpha+(alpha*z)/rho ) / eta_2;
+
+  tmp(1,0) = fy * (alpha*beta*x*y) / (eta_2*rho);
+  tmp(1,1) = fy * ( -1/eta + (alpha*beta*y_2) / (eta_2*rho) );
+  tmp(1,2) = fy * y * ( 1-alpha+(alpha*z)/rho ) / eta_2;
+
+  _jacobianOplusXi =  tmp * T.rotation().toRotationMatrix();
+
+  _jacobianOplusXj(0,0) = -z * fx * (alpha*beta*x*y) / (eta_2*rho) + y * fx * x * ( 1-alpha+(alpha*z)/rho ) / eta_2;
+  _jacobianOplusXj(0,1) = z * fx * ( -1/eta + (alpha*beta*x_2) / (eta_2*rho) ) - x * fx * x * ( 1-alpha+(alpha*z)/rho ) / eta_2;
+  _jacobianOplusXj(0,2) = -y * fx * ( -1/eta + (alpha*beta*x_2) / (eta_2*rho) ) + x * fx * (alpha*beta*x*y) / (eta_2*rho);
+  _jacobianOplusXj(0,3) = fx * ( -1/eta + (alpha*beta*x_2) / (eta_2*rho) );
+  _jacobianOplusXj(0,4) = fx * (alpha*beta*x*y) / (eta_2*rho);
+  _jacobianOplusXj(0,5) = fx * x * ( 1-alpha+(alpha*z)/rho ) / eta_2;
+
+  _jacobianOplusXj(1,0) = -z * fy * ( -1/eta + (alpha*beta*y_2) / (eta_2*rho) ) + y * fy * y * ( 1-alpha+(alpha*z)/rho ) / eta_2;
+  _jacobianOplusXj(1,1) = z * fy * (alpha*beta*x*y) / (eta_2*rho) - x * fy * y * ( 1-alpha+(alpha*z)/rho ) / eta_2;
+  _jacobianOplusXj(1,2) = -y * fy * (alpha*beta*x*y) / (eta_2*rho) + x * fy * ( -1/eta + (alpha*beta*y_2) / (eta_2*rho) );
+  _jacobianOplusXj(1,3) = fy * (alpha*beta*x*y) / (eta_2*rho);
+  _jacobianOplusXj(1,4) = fy * ( -1/eta + (alpha*beta*y_2) / (eta_2*rho) );
+  _jacobianOplusXj(1,5) = fy * y * ( 1-alpha+(alpha*z)/rho ) / eta_2;
 }
 
-Vector2d EdgeSE3ProjectXYZ::cam_project(const Vector3d & trans_xyz) const{
+/*Vector2d EdgeSE3ProjectXYZ::cam_project(const Vector3d & trans_xyz) const{
   Vector2d proj = project2d(trans_xyz);
   Vector2d res;
+  res[0] = proj[0]*fx + cx;
+  res[1] = proj[1]*fy + cy;
+  return res;
+}*/
+
+Vector2d EdgeSE3ProjectXYZ::cam_project(const Vector3d & trans_xyz) const{
+  Vector2d proj;
+  Vector2d res;
+  const float imd = sqrt( beta*(trans_xyz[0]*trans_xyz[0]+trans_xyz[1]*trans_xyz[1])+trans_xyz[2]*trans_xyz[2] );
+  proj[0] = trans_xyz[0] / ( alpha*imd+(1-alpha)*trans_xyz[2] );
+  proj[1] = trans_xyz[1] / ( alpha*imd+(1-alpha)*trans_xyz[2] );
   res[0] = proj[0]*fx + cx;
   res[1] = proj[1]*fy + cy;
   return res;
@@ -269,27 +324,44 @@ void EdgeSE3ProjectXYZOnlyPose::linearizeOplus() {
 
   double x = xyz_trans[0];
   double y = xyz_trans[1];
-  double invz = 1.0/xyz_trans[2];
-  double invz_2 = invz*invz;
+  double z = xyz_trans[2];
+  double x_2 = x*x;
+  double y_2 = y*y;
+  double z_2 = z*z;
+  
+  double rho = sqrt( beta*(x_2+y_2)+z_2 );
+  double eta = (1-alpha)*z + alpha*rho;
+  double eta_2 = eta*eta;
 
-  _jacobianOplusXi(0,0) =  x*y*invz_2 *fx;
-  _jacobianOplusXi(0,1) = -(1+(x*x*invz_2)) *fx;
-  _jacobianOplusXi(0,2) = y*invz *fx;
-  _jacobianOplusXi(0,3) = -invz *fx;
-  _jacobianOplusXi(0,4) = 0;
-  _jacobianOplusXi(0,5) = x*invz_2 *fx;
+  _jacobianOplusXi(0,0) = -z * fx * (alpha*beta*x*y) / (eta_2*rho) + y * fx * x * ( 1-alpha+(alpha*z)/rho ) / eta_2;
+  _jacobianOplusXi(0,1) = z * fx * ( -1/eta + (alpha*beta*x_2) / (eta_2*rho) ) - x * fx * x * ( 1-alpha+(alpha*z)/rho ) / eta_2;
+  _jacobianOplusXi(0,2) = -y * fx * ( -1/eta + (alpha*beta*x_2) / (eta_2*rho) ) + x * fx * (alpha*beta*x*y) / (eta_2*rho);
+  _jacobianOplusXi(0,3) = fx * ( -1/eta + (alpha*beta*x_2) / (eta_2*rho) );
+  _jacobianOplusXi(0,4) = fx * (alpha*beta*x*y) / (eta_2*rho);
+  _jacobianOplusXi(0,5) = fx * x * ( 1-alpha+(alpha*z)/rho ) / eta_2;
 
-  _jacobianOplusXi(1,0) = (1+y*y*invz_2) *fy;
-  _jacobianOplusXi(1,1) = -x*y*invz_2 *fy;
-  _jacobianOplusXi(1,2) = -x*invz *fy;
-  _jacobianOplusXi(1,3) = 0;
-  _jacobianOplusXi(1,4) = -invz *fy;
-  _jacobianOplusXi(1,5) = y*invz_2 *fy;
+  _jacobianOplusXi(1,0) = -z * fy * ( -1/eta + (alpha*beta*y_2) / (eta_2*rho) ) + y * fy * y * ( 1-alpha+(alpha*z)/rho ) / eta_2;
+  _jacobianOplusXi(1,1) = z * fy * (alpha*beta*x*y) / (eta_2*rho) - x * fy * y * ( 1-alpha+(alpha*z)/rho ) / eta_2;
+  _jacobianOplusXi(1,2) = -y * fy * (alpha*beta*x*y) / (eta_2*rho) + x * fy * ( -1/eta + (alpha*beta*y_2) / (eta_2*rho) );
+  _jacobianOplusXi(1,3) = fy * (alpha*beta*x*y) / (eta_2*rho);
+  _jacobianOplusXi(1,4) = fy * ( -1/eta + (alpha*beta*y_2) / (eta_2*rho) );
+  _jacobianOplusXi(1,5) = fy * y * ( 1-alpha+(alpha*z)/rho ) / eta_2;
 }
 
-Vector2d EdgeSE3ProjectXYZOnlyPose::cam_project(const Vector3d & trans_xyz) const{
+/*Vector2d EdgeSE3ProjectXYZOnlyPose::cam_project(const Vector3d & trans_xyz) const{
   Vector2d proj = project2d(trans_xyz);
   Vector2d res;
+  res[0] = proj[0]*fx + cx;
+  res[1] = proj[1]*fy + cy;
+  return res;
+}*/
+
+Vector2d EdgeSE3ProjectXYZOnlyPose::cam_project(const Vector3d & trans_xyz) const{
+  Vector2d proj;
+  Vector2d res;
+  const float imd = sqrt( beta*(trans_xyz[0]*trans_xyz[0]+trans_xyz[1]*trans_xyz[1])+trans_xyz[2]*trans_xyz[2] );
+  proj[0] = trans_xyz[0] / ( alpha*imd+(1-alpha)*trans_xyz[2] );
+  proj[1] = trans_xyz[1] / ( alpha*imd+(1-alpha)*trans_xyz[2] );
   res[0] = proj[0]*fx + cx;
   res[1] = proj[1]*fy + cy;
   return res;

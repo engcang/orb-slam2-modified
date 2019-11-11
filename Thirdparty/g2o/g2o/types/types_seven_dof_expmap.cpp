@@ -156,6 +156,15 @@ namespace g2o {
     return os.good();
   }
 
+  Vector2d EdgeSim3ProjectXYZ::cam_project(const Vector3d & trans_xyz) const
+  {
+    Vector2d proj;
+    const float imd = sqrt( beta*(trans_xyz[0]*trans_xyz[0]+trans_xyz[1]*trans_xyz[1])+trans_xyz[2]*trans_xyz[2] );
+    proj[0] = trans_xyz[0] / ( alpha*imd+(1-alpha)*trans_xyz[2] );
+    proj[1] = trans_xyz[1] / ( alpha*imd+(1-alpha)*trans_xyz[2] );
+    return proj;
+  }
+
 /**InverseSim3ProjectXYZ*/
 
   EdgeInverseSim3ProjectXYZ::EdgeInverseSim3ProjectXYZ() :
@@ -192,6 +201,14 @@ namespace g2o {
     return os.good();
   }
 
+  Vector2d EdgeInverseSim3ProjectXYZ::cam_project(const Vector3d & trans_xyz) const
+  {
+    Vector2d proj;
+    const float imd = sqrt( beta*(trans_xyz[0]*trans_xyz[0]+trans_xyz[1]*trans_xyz[1])+trans_xyz[2]*trans_xyz[2] );
+    proj[0] = trans_xyz[0] / ( alpha*imd+(1-alpha)*trans_xyz[2] );
+    proj[1] = trans_xyz[1] / ( alpha*imd+(1-alpha)*trans_xyz[2] );
+    return proj;
+  }
 
 //  void EdgeSim3ProjectXYZ::linearizeOplus()
 //  {
