@@ -246,7 +246,7 @@ public:
    */
   void saveToTextFile(const std::string &filename) const;  
 
-   /**
+  /**
    * Loads the vocabulary from a binary file
    * @param filename
    */
@@ -257,6 +257,7 @@ public:
    * @param filename
    */
   void saveToBinaryFile(const std::string &filename) const;  
+
 
   /**
    * Saves the vocabulary into a file
@@ -1482,25 +1483,25 @@ bool TemplatedVocabulary<TDescriptor,F>::loadFromBinaryFile(const std::string &f
   m_nodes[0].id = 0;
   char buf[size_node]; int nid = 1;
   while (!f.eof()) {
-  f.read(buf, size_node);
-  m_nodes[nid].id = nid;
-  // FIXME
-  const int* ptr=(int*)buf;
-  m_nodes[nid].parent = *ptr;
-  //m_nodes[nid].parent = *(const int*)buf;
-  m_nodes[m_nodes[nid].parent].children.push_back(nid);
-  m_nodes[nid].descriptor = cv::Mat(1, F::L, CV_8U);
-  memcpy(m_nodes[nid].descriptor.data, buf+4, F::L);
-  m_nodes[nid].weight = *(float*)(buf+4+F::L);
-  if (buf[8+F::L]) { // is leaf
-    int wid = m_words.size();
-    m_words.resize(wid+1);
-    m_nodes[nid].word_id = wid;
-    m_words[wid] = &m_nodes[nid];
-  }
-  else
-    m_nodes[nid].children.reserve(m_k);
-  nid+=1;
+    f.read(buf, size_node);
+    m_nodes[nid].id = nid;
+    // FIXME
+    const int* ptr=(int*)buf;
+    m_nodes[nid].parent = *ptr;
+    //m_nodes[nid].parent = *(const int*)buf;
+    m_nodes[m_nodes[nid].parent].children.push_back(nid);
+    m_nodes[nid].descriptor = cv::Mat(1, F::L, CV_8U);
+    memcpy(m_nodes[nid].descriptor.data, buf+4, F::L);
+    m_nodes[nid].weight = *(float*)(buf+4+F::L);
+    if (buf[8+F::L]) { // is leaf
+      int wid = m_words.size();
+      m_words.resize(wid+1);
+      m_nodes[nid].word_id = wid;
+      m_words[wid] = &m_nodes[nid];
+    }
+    else
+      m_nodes[nid].children.reserve(m_k);
+    nid+=1;
   }
   f.close();
   return true;
@@ -1523,11 +1524,11 @@ void TemplatedVocabulary<TDescriptor,F>::saveToBinaryFile(const std::string &fil
   f.write((char*)&m_scoring, sizeof(m_scoring));
   f.write((char*)&m_weighting, sizeof(m_weighting));
   for(size_t i=1; i<nb_nodes;i++) {
-  const Node& node = m_nodes[i];
-  f.write((char*)&node.parent, sizeof(node.parent));
-  f.write((char*)node.descriptor.data, F::L);
-  _weight = node.weight; f.write((char*)&_weight, sizeof(_weight));
-  bool is_leaf = node.isLeaf(); f.write((char*)&is_leaf, sizeof(is_leaf)); // i put this one at the end for alignement....
+    const Node& node = m_nodes[i];
+    f.write((char*)&node.parent, sizeof(node.parent));
+    f.write((char*)node.descriptor.data, F::L);
+    _weight = node.weight; f.write((char*)&_weight, sizeof(_weight));
+    bool is_leaf = node.isLeaf(); f.write((char*)&is_leaf, sizeof(is_leaf)); // i put this one at the end for alignement....
   }
   f.close();
 }

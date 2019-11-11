@@ -141,8 +141,12 @@ class EdgeSim3ProjectXYZ : public  BaseBinaryEdge<2, Vector2d,  VertexSBAPointXY
       const VertexSBAPointXYZ* v2 = static_cast<const VertexSBAPointXYZ*>(_vertices[0]);
 
       Vector2d obs(_measurement);
-      _error = obs-v1->cam_map1(project(v1->estimate().map(v2->estimate())));
+      _error = obs-v1->cam_map1(cam_project(v1->estimate().map(v2->estimate())));
     }
+
+    Vector2d cam_project(const Vector3d & trans_xyz) const;
+
+    double alpha, beta;
 
    // virtual void linearizeOplus();
 
@@ -163,8 +167,12 @@ class EdgeInverseSim3ProjectXYZ : public  BaseBinaryEdge<2, Vector2d,  VertexSBA
       const VertexSBAPointXYZ* v2 = static_cast<const VertexSBAPointXYZ*>(_vertices[0]);
 
       Vector2d obs(_measurement);
-      _error = obs-v1->cam_map2(project(v1->estimate().inverse().map(v2->estimate())));
+      _error = obs-v1->cam_map2(cam_project(v1->estimate().inverse().map(v2->estimate())));
     }
+
+    Vector2d cam_project(const Vector3d & trans_xyz) const;
+
+    double alpha, beta;
 
    // virtual void linearizeOplus();
 
