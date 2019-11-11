@@ -20,14 +20,14 @@
 
 #include "ORBmatcher.h"
 
-#include <limits.h>
+#include<limits.h>
 
-#include <opencv2/core/core.hpp>
-#include <opencv2/features2d/features2d.hpp>
+#include<opencv2/core/core.hpp>
+#include<opencv2/features2d/features2d.hpp>
 
 #include "Thirdparty/DBoW2/DBoW2/FeatureVector.h"
 
-#include <stdint-gcc.h>
+#include<stdint-gcc.h>
 
 using namespace std;
 
@@ -88,12 +88,12 @@ int ORBmatcher::SearchByProjection(Frame &F, const vector<MapPoint*> &vpMapPoint
                 if(F.mvpMapPoints[idx]->Observations()>0)
                     continue;
 
-            if(F.mvuRight[idx]>0)
+            /*if(F.mvuRight[idx]>0)
             {
                 const float er = fabs(pMP->mTrackProjXR-F.mvuRight[idx]);
                 if(er>r*F.mvScaleFactors[nPredictedLevel])
                     continue;
-            }
+            }*/
 
             const cv::Mat &d = F.mDescriptors.row(idx);
 
@@ -147,6 +147,25 @@ bool ORBmatcher::CheckDistEpipolarLine(const cv::KeyPoint &kp1,const cv::KeyPoin
     const float num = a*kp2.pt.x+b*kp2.pt.y+c;
 
     const float den = a*a+b*b;
+
+    if(den==0)
+        return false;
+
+    const float dsqr = num*num/den;
+
+    return dsqr<3.84*pKF2->mvLevelSigma2[kp2.octave];
+}
+
+bool ORBmatcher::CheckDistEpipolarLine3D(const cv::Point3f &P3M1, const cv::Point3f &P3M2, const cv::Mat &E12, const KeyFrame *pKF2, const cv::KeyPoint &kp2)
+{
+    // Epipolar line in second image l = x1'F12 = [a b c]
+    const float a = P3M1.x*E12.at<float>(0,0)+P3M1.y*E12.at<float>(1,0)+P3M1.z*E12.at<float>(2,0);
+    const float b = P3M1.x*E12.at<float>(0,1)+P3M1.y*E12.at<float>(1,1)+P3M1.z*E12.at<float>(2,1);
+    const float c = P3M1.x*E12.at<float>(0,2)+P3M1.y*E12.at<float>(1,2)+P3M1.z*E12.at<float>(2,2);
+
+    const float num = a*P3M2.x+b*P3M2.y+c*P3M2.z;
+
+    const float den = a*a+b*b+c*c;
 
     if(den==0)
         return false;
@@ -295,6 +314,9 @@ int ORBmatcher::SearchByProjection(KeyFrame* pKF, cv::Mat Scw, const vector<MapP
     const float &cx = pKF->cx;
     const float &cy = pKF->cy;
 
+    const float &alpha = pKF->mDistCoef.at<float>(0);
+    const float &beta = pKF->mDistCoef.at<float>(1);
+    
     // Decompose Scw
     cv::Mat sRcw = Scw.rowRange(0,3).colRange(0,3);
     const float scw = sqrt(sRcw.row(0).dot(sRcw.row(0)));
@@ -328,12 +350,21 @@ int ORBmatcher::SearchByProjection(KeyFrame* pKF, cv::Mat Scw, const vector<MapP
             continue;
 
         // Project into Image
-        const float invz = 1/p3Dc.at<float>(2);
+        /*const float invz = 1/p3Dc.at<float>(2);
         const float x = p3Dc.at<float>(0)*invz;
         const float y = p3Dc.at<float>(1)*invz;
 
         const float u = fx*x+cx;
-        const float v = fy*y+cy;
+        const float v = fy*y+cy;*/
+        
+        const float p3dCx = p3Dc.at<float>(0);
+        const float p3dCy = p3Dc.at<float>(1);
+        const float p3dCz = p3Dc.at<float>(2);
+    
+        const float imd = sqrt( beta*(p3dCx*p3dCx+p3dCy*p3dCy) + p3dCz*p3dCz );
+        
+        const float u = fx*p3dCx / ( alpha*imd + (1-alpha)*p3dCz ) + cx;
+        const float v = fy*p3dCy / ( alpha*imd + (1-alpha)*p3dCz ) + cy;
 
         // Point must be inside the image
         if(!pKF->IsInImage(u,v))
@@ -654,7 +685,7 @@ int ORBmatcher::SearchByBoW(KeyFrame *pKF1, KeyFrame *pKF2, vector<MapPoint *> &
     return nmatches;
 }
 
-int ORBmatcher::SearchForTriangulation(KeyFrame *pKF1, KeyFrame *pKF2, cv::Mat F12,
+int ORBmatcher::SearchForTriangulation(KeyFrame *pKF1, KeyFrame *pKF2, cv::Mat E12,
                                        vector<pair<size_t, size_t> > &vMatchedPairs, const bool bOnlyStereo)
 {    
     const DBoW2::FeatureVector &vFeatVec1 = pKF1->mFeatVec;
@@ -665,9 +696,22 @@ int ORBmatcher::SearchForTriangulation(KeyFrame *pKF1, KeyFrame *pKF2, cv::Mat F
     cv::Mat R2w = pKF2->GetRotation();
     cv::Mat t2w = pKF2->GetTranslation();
     cv::Mat C2 = R2w*Cw+t2w;
-    const float invz = 1.0f/C2.at<float>(2);
+    
+    const float &alpha = pKF1->mDistCoef.at<float>(0);
+    const float &beta = pKF1->mDistCoef.at<float>(1);
+    
+    const float p3dC2x = C2.at<float>(0);
+    const float p3dC2y = C2.at<float>(1);
+    const float p3dC2z = C2.at<float>(2);
+    
+    const float im2d = sqrt( beta*(p3dC2x*p3dC2x+p3dC2y*p3dC2y) + p3dC2z*p3dC2z );
+    
+    /*const float invz = 1.0f/C2.at<float>(2);
     const float ex =pKF2->fx*C2.at<float>(0)*invz+pKF2->cx;
-    const float ey =pKF2->fy*C2.at<float>(1)*invz+pKF2->cy;
+    const float ey =pKF2->fy*C2.at<float>(1)*invz+pKF2->cy;*/
+    
+    const float ex = pKF2->fx*p3dC2x / ( alpha*im2d + (1-alpha)*p3dC2z ) + pKF2->cx;
+    const float ey = pKF2->fy*p3dC2y / ( alpha*im2d + (1-alpha)*p3dC2z ) + pKF2->cy;
 
     // Find matches between not tracked keypoints
     // Matching speed-up by ORB Vocabulary
@@ -710,6 +754,8 @@ int ORBmatcher::SearchForTriangulation(KeyFrame *pKF1, KeyFrame *pKF2, cv::Mat F
                 
                 const cv::KeyPoint &kp1 = pKF1->mvKeysUn[idx1];
                 
+                const cv::Point3f &P3M1 = pKF1->mvP3M[idx1];
+                
                 const cv::Mat &d1 = pKF1->mDescriptors.row(idx1);
                 
                 int bestDist = TH_LOW;
@@ -739,6 +785,8 @@ int ORBmatcher::SearchForTriangulation(KeyFrame *pKF1, KeyFrame *pKF2, cv::Mat F
                         continue;
 
                     const cv::KeyPoint &kp2 = pKF2->mvKeysUn[idx2];
+                    
+                    const cv::Point3f &P3M2 = pKF2->mvP3M[idx2];
 
                     if(!bStereo1 && !bStereo2)
                     {
@@ -748,7 +796,13 @@ int ORBmatcher::SearchForTriangulation(KeyFrame *pKF1, KeyFrame *pKF2, cv::Mat F
                             continue;
                     }
 
-                    if(CheckDistEpipolarLine(kp1,kp2,F12,pKF2))
+                    /*if(CheckDistEpipolarLine(kp1,kp2,E12,pKF2))
+                    {
+                        bestIdx2 = idx2;
+                        bestDist = dist;
+                    }*/
+                    
+                    if(CheckDistEpipolarLine3D(P3M1,P3M2,E12,pKF2,kp2))
                     {
                         bestIdx2 = idx2;
                         bestDist = dist;
@@ -832,6 +886,9 @@ int ORBmatcher::Fuse(KeyFrame *pKF, const vector<MapPoint *> &vpMapPoints, const
     const float &cx = pKF->cx;
     const float &cy = pKF->cy;
     const float &bf = pKF->mbf;
+    
+    const float &alpha = pKF->mDistCoef.at<float>(0);
+    const float &beta = pKF->mDistCoef.at<float>(1);
 
     cv::Mat Ow = pKF->GetCameraCenter();
 
@@ -857,11 +914,20 @@ int ORBmatcher::Fuse(KeyFrame *pKF, const vector<MapPoint *> &vpMapPoints, const
             continue;
 
         const float invz = 1/p3Dc.at<float>(2);
-        const float x = p3Dc.at<float>(0)*invz;
+        /*const float x = p3Dc.at<float>(0)*invz;
         const float y = p3Dc.at<float>(1)*invz;
 
         const float u = fx*x+cx;
-        const float v = fy*y+cy;
+        const float v = fy*y+cy;*/
+        
+        const float p3dCx = p3Dc.at<float>(0);
+        const float p3dCy = p3Dc.at<float>(1);
+        const float p3dCz = p3Dc.at<float>(2);
+    
+        const float imd = sqrt( beta*(p3dCx*p3dCx+p3dCy*p3dCy) + p3dCz*p3dCz );
+        
+        const float u = fx*p3dCx / ( alpha*imd + (1-alpha)*p3dCz ) + cx;
+        const float v = fy*p3dCy / ( alpha*imd + (1-alpha)*p3dCz ) + cy;
 
         // Point must be inside the image
         if(!pKF->IsInImage(u,v))
@@ -981,6 +1047,9 @@ int ORBmatcher::Fuse(KeyFrame *pKF, cv::Mat Scw, const vector<MapPoint *> &vpPoi
     const float &fy = pKF->fy;
     const float &cx = pKF->cx;
     const float &cy = pKF->cy;
+    
+    const float &alpha = pKF->mDistCoef.at<float>(0);
+    const float &beta = pKF->mDistCoef.at<float>(1);
 
     // Decompose Scw
     cv::Mat sRcw = Scw.rowRange(0,3).colRange(0,3);
@@ -1016,12 +1085,21 @@ int ORBmatcher::Fuse(KeyFrame *pKF, cv::Mat Scw, const vector<MapPoint *> &vpPoi
             continue;
 
         // Project into Image
-        const float invz = 1.0/p3Dc.at<float>(2);
+        /*const float invz = 1.0/p3Dc.at<float>(2);
         const float x = p3Dc.at<float>(0)*invz;
         const float y = p3Dc.at<float>(1)*invz;
 
         const float u = fx*x+cx;
-        const float v = fy*y+cy;
+        const float v = fy*y+cy;*/
+        
+        const float p3dCx = p3Dc.at<float>(0);
+        const float p3dCy = p3Dc.at<float>(1);
+        const float p3dCz = p3Dc.at<float>(2);
+    
+        const float imd = sqrt( beta*(p3dCx*p3dCx+p3dCy*p3dCy) + p3dCz*p3dCz );
+        
+        const float u = fx*p3dCx / ( alpha*imd + (1-alpha)*p3dCz ) + cx;
+        const float v = fy*p3dCy / ( alpha*imd + (1-alpha)*p3dCz ) + cy;
 
         // Point must be inside the image
         if(!pKF->IsInImage(u,v))
@@ -1106,6 +1184,9 @@ int ORBmatcher::SearchBySim3(KeyFrame *pKF1, KeyFrame *pKF2, vector<MapPoint*> &
     const float &fy = pKF1->fy;
     const float &cx = pKF1->cx;
     const float &cy = pKF1->cy;
+    
+    const float &alpha = pKF1->mDistCoef.at<float>(0);
+    const float &beta = pKF1->mDistCoef.at<float>(1);
 
     // Camera 1 from world
     cv::Mat R1w = pKF1->GetRotation();
@@ -1163,12 +1244,21 @@ int ORBmatcher::SearchBySim3(KeyFrame *pKF1, KeyFrame *pKF2, vector<MapPoint*> &
         if(p3Dc2.at<float>(2)<0.0)
             continue;
 
-        const float invz = 1.0/p3Dc2.at<float>(2);
+        /*const float invz = 1.0/p3Dc2.at<float>(2);
         const float x = p3Dc2.at<float>(0)*invz;
         const float y = p3Dc2.at<float>(1)*invz;
 
         const float u = fx*x+cx;
-        const float v = fy*y+cy;
+        const float v = fy*y+cy;*/
+        
+        const float p3dCx = p3Dc2.at<float>(0);
+        const float p3dCy = p3Dc2.at<float>(1);
+        const float p3dCz = p3Dc2.at<float>(2);
+    
+        const float imd = sqrt( beta*(p3dCx*p3dCx+p3dCy*p3dCy) + p3dCz*p3dCz );
+        
+        const float u = fx*p3dCx / ( alpha*imd + (1-alpha)*p3dCz ) + cx;
+        const float v = fy*p3dCy / ( alpha*imd + (1-alpha)*p3dCz ) + cy;
 
         // Point must be inside the image
         if(!pKF2->IsInImage(u,v))
@@ -1243,12 +1333,21 @@ int ORBmatcher::SearchBySim3(KeyFrame *pKF1, KeyFrame *pKF2, vector<MapPoint*> &
         if(p3Dc1.at<float>(2)<0.0)
             continue;
 
-        const float invz = 1.0/p3Dc1.at<float>(2);
+        /*const float invz = 1.0/p3Dc1.at<float>(2);
         const float x = p3Dc1.at<float>(0)*invz;
         const float y = p3Dc1.at<float>(1)*invz;
 
         const float u = fx*x+cx;
-        const float v = fy*y+cy;
+        const float v = fy*y+cy;*/
+        
+        const float p3dCx = p3Dc1.at<float>(0);
+        const float p3dCy = p3Dc1.at<float>(1);
+        const float p3dCz = p3Dc1.at<float>(2);
+    
+        const float imd = sqrt( beta*(p3dCx*p3dCx+p3dCy*p3dCy) + p3dCz*p3dCz );
+        
+        const float u = fx*p3dCx / ( alpha*imd + (1-alpha)*p3dCz ) + cx;
+        const float v = fy*p3dCy / ( alpha*imd + (1-alpha)*p3dCz ) + cy;
 
         // Point must be inside the image
         if(!pKF1->IsInImage(u,v))
@@ -1347,6 +1446,9 @@ int ORBmatcher::SearchByProjection(Frame &CurrentFrame, const Frame &LastFrame, 
 
     const bool bForward = tlc.at<float>(2)>CurrentFrame.mb && !bMono;
     const bool bBackward = -tlc.at<float>(2)>CurrentFrame.mb && !bMono;
+    
+    const float &alpha = CurrentFrame.mDistCoef.at<float>(0);
+    const float &beta = CurrentFrame.mDistCoef.at<float>(1);
 
     for(int i=0; i<LastFrame.N; i++)
     {
@@ -1360,7 +1462,7 @@ int ORBmatcher::SearchByProjection(Frame &CurrentFrame, const Frame &LastFrame, 
                 cv::Mat x3Dw = pMP->GetWorldPos();
                 cv::Mat x3Dc = Rcw*x3Dw+tcw;
 
-                const float xc = x3Dc.at<float>(0);
+                /*const float xc = x3Dc.at<float>(0);
                 const float yc = x3Dc.at<float>(1);
                 const float invzc = 1.0/x3Dc.at<float>(2);
 
@@ -1368,7 +1470,19 @@ int ORBmatcher::SearchByProjection(Frame &CurrentFrame, const Frame &LastFrame, 
                     continue;
 
                 float u = CurrentFrame.fx*xc*invzc+CurrentFrame.cx;
-                float v = CurrentFrame.fy*yc*invzc+CurrentFrame.cy;
+                float v = CurrentFrame.fy*yc*invzc+CurrentFrame.cy;*/
+                
+                const float xc = x3Dc.at<float>(0);
+                const float yc = x3Dc.at<float>(1);
+                const float zc = x3Dc.at<float>(2);
+                
+                const float imd = sqrt( beta*(xc*xc+yc*yc)+zc*zc );
+    
+                const float mx = xc / (alpha*imd + (1-alpha)*zc);
+                const float my = yc / (alpha*imd + (1-alpha)*zc);
+
+                float u = CurrentFrame.fx*mx+CurrentFrame.cx;
+                float v = CurrentFrame.fy*my+CurrentFrame.cy;
 
                 if(u<CurrentFrame.mnMinX || u>CurrentFrame.mnMaxX)
                     continue;
@@ -1404,13 +1518,13 @@ int ORBmatcher::SearchByProjection(Frame &CurrentFrame, const Frame &LastFrame, 
                         if(CurrentFrame.mvpMapPoints[i2]->Observations()>0)
                             continue;
 
-                    if(CurrentFrame.mvuRight[i2]>0)
+                    /*if(CurrentFrame.mvuRight[i2]>0)
                     {
                         const float ur = u - CurrentFrame.mbf*invzc;
                         const float er = fabs(ur - CurrentFrame.mvuRight[i2]);
                         if(er>radius)
                             continue;
-                    }
+                    }*/
 
                     const cv::Mat &d = CurrentFrame.mDescriptors.row(i2);
 
@@ -1484,6 +1598,9 @@ int ORBmatcher::SearchByProjection(Frame &CurrentFrame, KeyFrame *pKF, const set
     const float factor = 1.0f/HISTO_LENGTH;
 
     const vector<MapPoint*> vpMPs = pKF->GetMapPointMatches();
+    
+    const float &alpha = CurrentFrame.mDistCoef.at<float>(0);
+    const float &beta = CurrentFrame.mDistCoef.at<float>(1);
 
     for(size_t i=0, iend=vpMPs.size(); i<iend; i++)
     {
@@ -1497,12 +1614,24 @@ int ORBmatcher::SearchByProjection(Frame &CurrentFrame, KeyFrame *pKF, const set
                 cv::Mat x3Dw = pMP->GetWorldPos();
                 cv::Mat x3Dc = Rcw*x3Dw+tcw;
 
-                const float xc = x3Dc.at<float>(0);
+                /*const float xc = x3Dc.at<float>(0);
                 const float yc = x3Dc.at<float>(1);
                 const float invzc = 1.0/x3Dc.at<float>(2);
 
                 const float u = CurrentFrame.fx*xc*invzc+CurrentFrame.cx;
-                const float v = CurrentFrame.fy*yc*invzc+CurrentFrame.cy;
+                const float v = CurrentFrame.fy*yc*invzc+CurrentFrame.cy;*/
+                
+                const float xc = x3Dc.at<float>(0);
+                const float yc = x3Dc.at<float>(1);
+                const float zc = x3Dc.at<float>(2);
+                
+                const float imd = sqrt( beta*(xc*xc+yc*yc)+zc*zc );
+    
+                const float mx = xc / (alpha*imd + (1-alpha)*zc);
+                const float my = yc / (alpha*imd + (1-alpha)*zc);
+
+                float u = CurrentFrame.fx*mx+CurrentFrame.cx;
+                float v = CurrentFrame.fy*my+CurrentFrame.cy;
 
                 if(u<CurrentFrame.mnMinX || u>CurrentFrame.mnMaxX)
                     continue;

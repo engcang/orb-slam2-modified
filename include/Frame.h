@@ -35,7 +35,7 @@
 namespace ORB_SLAM2
 {
 #define FRAME_GRID_ROWS 48
-#define FRAME_GRID_COLS 64
+#define FRAME_GRID_COLS 48
 
 class MapPoint;
 class KeyFrame;
@@ -82,6 +82,7 @@ public:
     // Check if a MapPoint is in the frustum of the camera
     // and fill variables of the MapPoint to be used by the tracking
     bool isInFrustum(MapPoint* pMP, float viewingCosLimit);
+    bool isInFrustumFisheye(MapPoint* pMP, float viewingCosLimit);
 
     // Compute the cell of a keypoint (return false if outside the grid)
     bool PosInGrid(const cv::KeyPoint &kp, int &posX, int &posY);
@@ -141,6 +142,9 @@ public:
     // "Monocular" keypoints have a negative value.
     std::vector<float> mvuRight;
     std::vector<float> mvDepth;
+    
+    // Fisheye monocular EUCM model, p=KM, M=[Mx,My,Mz]
+    std::vector<cv::Point3f> mvP3M;
 
     // Bag of Words Vector structures.
     DBoW2::BowVector mBowVec;

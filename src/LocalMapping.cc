@@ -47,14 +47,6 @@ void LocalMapping::SetTracker(Tracking *pTracker)
 void LocalMapping::Run()
 {
 
-    //ryu - CPU affinity
-    unsigned long mask = 240; //(b1111 0000)
-    if(pthread_setaffinity_np(pthread_self(),sizeof(mask),(cpu_set_t*)&mask) < 0){
-        std::cout << "setaffinity_np error" << std::endl;
-        //abort();
-    }
-    else {std::cout << "cpu : " << sched_getcpu() << std::endl;}
-    
     mbFinished = false;
 
     while(1)
@@ -234,8 +226,13 @@ void LocalMapping::CreateNewMapPoints()
     const float &fy1 = mpCurrentKeyFrame->fy;
     const float &cx1 = mpCurrentKeyFrame->cx;
     const float &cy1 = mpCurrentKeyFrame->cy;
-    const float &invfx1 = mpCurrentKeyFrame->invfx;
-    const float &invfy1 = mpCurrentKeyFrame->invfy;
+    //const float &invfx1 = mpCurrentKeyFrame->invfx;
+    //const float &invfy1 = mpCurrentKeyFrame->invfy;
+    
+    const float &alpha = mpCurrentKeyFrame->mDistCoef.at<float>(0);
+    const float &beta = mpCurrentKeyFrame->mDistCoef.at<float>(1);
+
+    const float mR2range = 1.0f/(beta*(2*alpha-1));
 
     const float ratioFactor = 1.5f*mpCurrentKeyFrame->mfScaleFactor;
 
@@ -269,11 +266,11 @@ void LocalMapping::CreateNewMapPoints()
         }
 
         // Compute Fundamental Matrix
-        cv::Mat F12 = ComputeF12(mpCurrentKeyFrame,pKF2);
+        cv::Mat E12 = ComputeF12(mpCurrentKeyFrame,pKF2);    //E12
 
         // Search matches that fullfil epipolar constraint
         vector<pair<size_t,size_t> > vMatchedIndices;
-        matcher.SearchForTriangulation(mpCurrentKeyFrame,pKF2,F12,vMatchedIndices,false);
+        matcher.SearchForTriangulation(mpCurrentKeyFrame,pKF2,E12,vMatchedIndices,false);
 
         cv::Mat Rcw2 = pKF2->GetRotation();
         cv::Mat Rwc2 = Rcw2.t();
@@ -286,8 +283,8 @@ void LocalMapping::CreateNewMapPoints()
         const float &fy2 = pKF2->fy;
         const float &cx2 = pKF2->cx;
         const float &cy2 = pKF2->cy;
-        const float &invfx2 = pKF2->invfx;
-        const float &invfy2 = pKF2->invfy;
+        //const float &invfx2 = pKF2->invfx;
+        //const float &invfy2 = pKF2->invfy;
 
         // Triangulate each match
         const int nmatches = vMatchedIndices.size();
@@ -299,14 +296,19 @@ void LocalMapping::CreateNewMapPoints()
             const cv::KeyPoint &kp1 = mpCurrentKeyFrame->mvKeysUn[idx1];
             const float kp1_ur=mpCurrentKeyFrame->mvuRight[idx1];
             bool bStereo1 = kp1_ur>=0;
+            const cv::Point3f &P3M1 = mpCurrentKeyFrame->mvP3M[idx1];
 
             const cv::KeyPoint &kp2 = pKF2->mvKeysUn[idx2];
             const float kp2_ur = pKF2->mvuRight[idx2];
             bool bStereo2 = kp2_ur>=0;
+            const cv::Point3f &P3M2 = pKF2->mvP3M[idx2];
 
             // Check parallax between rays
-            cv::Mat xn1 = (cv::Mat_<float>(3,1) << (kp1.pt.x-cx1)*invfx1, (kp1.pt.y-cy1)*invfy1, 1.0);
-            cv::Mat xn2 = (cv::Mat_<float>(3,1) << (kp2.pt.x-cx2)*invfx2, (kp2.pt.y-cy2)*invfy2, 1.0);
+            /*cv::Mat xn1 = (cv::Mat_<float>(3,1) << (kp1.pt.x-cx1)*invfx1, (kp1.pt.y-cy1)*invfy1, 1.0);
+            cv::Mat xn2 = (cv::Mat_<float>(3,1) << (kp2.pt.x-cx2)*invfx2, (kp2.pt.y-cy2)*invfy2, 1.0);*/
+            
+            cv::Mat xn1 = (cv::Mat_<float>(3,1) << P3M1.x, P3M1.y, P3M1.z);
+            cv::Mat xn2 = (cv::Mat_<float>(3,1) << P3M2.x, P3M2.y, P3M2.z);
 
             cv::Mat ray1 = Rwc1*xn1;
             cv::Mat ray2 = Rwc2*xn2;
@@ -328,10 +330,10 @@ void LocalMapping::CreateNewMapPoints()
             {
                 // Linear Triangulation Method
                 cv::Mat A(4,4,CV_32F);
-                A.row(0) = xn1.at<float>(0)*Tcw1.row(2)-Tcw1.row(0);
-                A.row(1) = xn1.at<float>(1)*Tcw1.row(2)-Tcw1.row(1);
-                A.row(2) = xn2.at<float>(0)*Tcw2.row(2)-Tcw2.row(0);
-                A.row(3) = xn2.at<float>(1)*Tcw2.row(2)-Tcw2.row(1);
+                A.row(0) = xn1.at<float>(0)*Tcw1.row(2)-xn1.at<float>(2)*Tcw1.row(0);
+                A.row(1) = xn1.at<float>(1)*Tcw1.row(2)-xn1.at<float>(2)*Tcw1.row(1);
+                A.row(2) = xn2.at<float>(0)*Tcw2.row(2)-xn2.at<float>(2)*Tcw2.row(0);
+                A.row(3) = xn2.at<float>(1)*Tcw2.row(2)-xn2.at<float>(2)*Tcw2.row(1);
 
                 cv::Mat w,u,vt;
                 cv::SVD::compute(A,w,u,vt,cv::SVD::MODIFY_A| cv::SVD::FULL_UV);
@@ -375,11 +377,38 @@ void LocalMapping::CreateNewMapPoints()
 
             if(!bStereo1)
             {
-                float u1 = fx1*x1*invz1+cx1;
-                float v1 = fy1*y1*invz1+cy1;
+                //float u1 = fx1*x1*invz1+cx1;
+                //float v1 = fy1*y1*invz1+cy1;
+
+                /*float im1d = sqrt( beta*(x1*x1+y1*y1) + z1*z1 );
+                float u1 = fx1*x1 / (alpha*im1d + (1-alpha)*z1 ) + cx1;
+                float v1 = fy1*y1 / (alpha*im1d + (1-alpha)*z1 ) + cy1;
+                
                 float errX1 = u1 - kp1.pt.x;
                 float errY1 = v1 - kp1.pt.y;
                 if((errX1*errX1+errY1*errY1)>5.991*sigmaSquare1)
+                    continue;*/
+                
+                float im1d = sqrt( beta*(x1*x1+y1*y1) + z1*z1 );
+                float im1x = x1 / (alpha*im1d + (1-alpha)*z1 );
+                float im1y = y1 / (alpha*im1d + (1-alpha)*z1 );
+
+                float distance1R2 = im1x*im1x + im1y*im1y;
+
+                //EUCM model unprojection range, R2 = Mx^2+My^2
+                if(distance1R2>mR2range)
+                {
+                    cout<<"out of the range"<<endl;
+                    continue;
+                }
+
+                float im1z = ( 1-beta*alpha*alpha*distance1R2 )/( alpha*sqrt( 1-(2*alpha-1)*beta*distance1R2 ) + 1-alpha );
+
+                float errX1 = im1x - P3M1.x;
+                float errY1 = im1y - P3M1.y;
+                float errZ1 = im1z - P3M1.z;
+
+                if((errX1*errX1+errY1*errY1+errZ1*errZ1)*fx1*fx2>5.991*sigmaSquare1)
                     continue;
             }
             else
@@ -401,11 +430,38 @@ void LocalMapping::CreateNewMapPoints()
             const float invz2 = 1.0/z2;
             if(!bStereo2)
             {
-                float u2 = fx2*x2*invz2+cx2;
-                float v2 = fy2*y2*invz2+cy2;
+                //float u2 = fx2*x2*invz2+cx2;
+                //float v2 = fy2*y2*invz2+cy2;
+                
+                /*float im2d = sqrt( beta*(x2*x2+y2*y2) + z2*z2 );
+                float u2 = fx2*x2 / (alpha*im2d + (1-alpha)*z2 ) + cx2;
+                float v2 = fy2*y2 / (alpha*im2d + (1-alpha)*z2 ) + cy2;
+                
                 float errX2 = u2 - kp2.pt.x;
                 float errY2 = v2 - kp2.pt.y;
                 if((errX2*errX2+errY2*errY2)>5.991*sigmaSquare2)
+                    continue;*/
+
+                float im2d = sqrt( beta*(x2*x2+y2*y2) + z2*z2 );
+                float im2x = x2 / (alpha*im2d + (1-alpha)*z2 );
+                float im2y = y2 / (alpha*im2d + (1-alpha)*z2 );
+
+                float distance2R2 = im2x*im2x + im2y*im2y;
+
+                //EUCM model unprojection range, R2 = Mx^2+My^2
+                if(distance2R2>mR2range)
+                {
+                    cout<<"out of the range"<<endl;
+                    continue;
+                }
+
+                float im2z = ( 1-beta*alpha*alpha*distance2R2 )/( alpha*sqrt( 1-(2*alpha-1)*beta*distance2R2 ) + 1-alpha );
+
+                float errX2 = im2x - P3M2.x;
+                float errY2 = im2y - P3M2.y;
+                float errZ2 = im2z - P3M2.z;
+
+                if((errX2*errX2+errY2*errY2+errZ2*errZ2)*fx1*fx2>5.991*sigmaSquare2)
                     continue;
             }
             else
@@ -553,11 +609,11 @@ cv::Mat LocalMapping::ComputeF12(KeyFrame *&pKF1, KeyFrame *&pKF2)
 
     cv::Mat t12x = SkewSymmetricMatrix(t12);
 
-    const cv::Mat &K1 = pKF1->mK;
-    const cv::Mat &K2 = pKF2->mK;
+    //const cv::Mat &K1 = pKF1->mK;
+    //const cv::Mat &K2 = pKF2->mK;
 
-
-    return K1.t().inv()*t12x*R12*K2.inv();
+    //return K1.t().inv()*t12x*R12*K2.inv();
+    return t12x*R12;
 }
 
 void LocalMapping::RequestStop()

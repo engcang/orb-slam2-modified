@@ -155,6 +155,7 @@ public:
 
     // Calibration parameters
     const float fx, fy, cx, cy, invfx, invfy, mbf, mb, mThDepth;
+    cv::Mat mDistCoef;
 
     // Number of KeyPoints
     const int N;
@@ -165,6 +166,9 @@ public:
     const std::vector<float> mvuRight; // negative value for monocular points
     const std::vector<float> mvDepth; // negative value for monocular points
     const cv::Mat mDescriptors;
+    
+    // Fisheye monocular EUCM model, p=KM, M=[Mx,My,Mz]
+    std::vector<cv::Point3f> mvP3M;
 
     //BoW
     DBoW2::BowVector mBowVec;

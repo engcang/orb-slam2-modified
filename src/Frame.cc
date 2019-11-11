@@ -22,6 +22,7 @@
 #include "Converter.h"
 #include "ORBmatcher.h"
 #include <thread>
+#include <cmath>
 
 namespace ORB_SLAM2
 {
@@ -40,8 +41,8 @@ Frame::Frame(const Frame &frame)
     :mpORBvocabulary(frame.mpORBvocabulary), mpORBextractorLeft(frame.mpORBextractorLeft), mpORBextractorRight(frame.mpORBextractorRight),
      mTimeStamp(frame.mTimeStamp), mK(frame.mK.clone()), mDistCoef(frame.mDistCoef.clone()),
      mbf(frame.mbf), mb(frame.mb), mThDepth(frame.mThDepth), N(frame.N), mvKeys(frame.mvKeys),
-     mvKeysRight(frame.mvKeysRight), mvKeysUn(frame.mvKeysUn),  mvuRight(frame.mvuRight),
-     mvDepth(frame.mvDepth), mBowVec(frame.mBowVec), mFeatVec(frame.mFeatVec),
+     mvKeysRight(frame.mvKeysRight), mvKeysUn(frame.mvKeysUn), mvuRight(frame.mvuRight),
+     mvDepth(frame.mvDepth), mvP3M(frame.mvP3M), mBowVec(frame.mBowVec), mFeatVec(frame.mFeatVec),
      mDescriptors(frame.mDescriptors.clone()), mDescriptorsRight(frame.mDescriptorsRight.clone()),
      mvpMapPoints(frame.mvpMapPoints), mvbOutlier(frame.mvbOutlier), mnId(frame.mnId),
      mpReferenceKF(frame.mpReferenceKF), mnScaleLevels(frame.mnScaleLevels),
@@ -196,7 +197,7 @@ Frame::Frame(const cv::Mat &imGray, const double &timeStamp, ORBextractor* extra
         return;
 
     UndistortKeyPoints();
-
+    
     // Set no stereo information
     mvuRight = vector<float>(N,-1);
     mvDepth = vector<float>(N,-1);
@@ -302,7 +303,7 @@ bool Frame::isInFrustum(MapPoint *pMP, float viewingCosLimit)
     if(dist<minDistance || dist>maxDistance)
         return false;
 
-   // Check viewing angle
+    // Check viewing angle
     cv::Mat Pn = pMP->GetNormal();
 
     const float viewCos = PO.dot(Pn)/dist;
@@ -317,6 +318,72 @@ bool Frame::isInFrustum(MapPoint *pMP, float viewingCosLimit)
     pMP->mbTrackInView = true;
     pMP->mTrackProjX = u;
     pMP->mTrackProjXR = u - mbf*invz;
+    pMP->mTrackProjY = v;
+    pMP->mnTrackScaleLevel= nPredictedLevel;
+    pMP->mTrackViewCos = viewCos;
+
+    return true;
+}
+
+bool Frame::isInFrustumFisheye(MapPoint *pMP, float viewingCosLimit)
+{
+    pMP->mbTrackInView = false;
+
+    // 3D in absolute coordinates
+    cv::Mat P = pMP->GetWorldPos(); 
+
+    // 3D in camera coordinates
+    const cv::Mat Pc = mRcw*P+mtcw;
+    const float &PcX = Pc.at<float>(0);
+    const float &PcY= Pc.at<float>(1);
+    const float &PcZ = Pc.at<float>(2);
+
+    // Project in image and check it is not outside
+    const float alpha = mDistCoef.at<float>(0);
+    const float beta = mDistCoef.at<float>(1);
+    const float imd = sqrt( beta*(PcX*PcX+PcY*PcY)+PcZ*PcZ );
+    
+    const float mx = PcX / (alpha*imd + (1-alpha)*PcZ);
+    const float my = PcY / (alpha*imd + (1-alpha)*PcZ);
+    
+    const float mR2 = mx*mx+my*my;
+    const float mR2range = 1.0f/(beta*(2*alpha-1));
+    
+    if(mR2>mR2range)
+        return false;
+    
+    const float u = fx*mx + cx;
+    const float v = fy*my + cy;
+    
+    if(u<mnMinX || u>mnMaxX)
+        return false;
+    if(v<mnMinY || v>mnMaxY)
+        return false;
+
+    // Check distance is in the scale invariance region of the MapPoint
+    const float maxDistance = pMP->GetMaxDistanceInvariance();
+    const float minDistance = pMP->GetMinDistanceInvariance();
+    const cv::Mat PO = P-mOw;
+    const float dist = cv::norm(PO);
+
+    if(dist<minDistance || dist>maxDistance)
+        return false;
+
+    // Check viewing angle
+    cv::Mat Pn = pMP->GetNormal();
+
+    const float viewCos = PO.dot(Pn)/dist;
+
+    //if(viewCos<viewingCosLimit)
+    //    return false;
+
+    // Predict scale in the image
+    const int nPredictedLevel = pMP->PredictScale(dist,this);
+
+    // Data used by the tracking
+    pMP->mbTrackInView = true;
+    pMP->mTrackProjX = u;
+    //pMP->mTrackProjXR = u - mbf*invz;
     pMP->mTrackProjY = v;
     pMP->mnTrackScaleLevel= nPredictedLevel;
     pMP->mTrackViewCos = viewCos;
@@ -409,8 +476,9 @@ void Frame::UndistortKeyPoints()
         return;
     }
 
-    // Fill matrix with points
-    cv::Mat mat(N,2,CV_32F);
+    // Fill matrix with points  
+    
+    /*cv::Mat mat(N,2,CV_32F);
     for(int i=0; i<N; i++)
     {
         mat.at<float>(i,0)=mvKeys[i].pt.x;
@@ -419,7 +487,7 @@ void Frame::UndistortKeyPoints()
 
     // Undistort points
     mat=mat.reshape(2);
-    cv::undistortPoints(mat,mat,mK,mDistCoef,cv::Mat(),mK);
+    cv::undistortPoints(mat,mat,mK,cv::Mat(),cv::Mat(),mK);
     mat=mat.reshape(1);
 
     // Fill undistorted keypoint vector
@@ -430,12 +498,39 @@ void Frame::UndistortKeyPoints()
         kp.pt.x=mat.at<float>(i,0);
         kp.pt.y=mat.at<float>(i,1);
         mvKeysUn[i]=kp;
+    }*/
+    
+    // Fill M, EUCM p=KM
+    mvKeysUn.resize(N);
+    mvP3M.resize(N);
+    float alpha = mDistCoef.at<float>(0);
+    float beta = mDistCoef.at<float>(1);
+    float mfx = mK.at<float>(0,0);
+    float mfy = mK.at<float>(1,1);
+    float mcx = mK.at<float>(0,2);
+    float mcy = mK.at<float>(1,2);
+    float minvfx = 1.0f/mfx;
+    float minvfy = 1.0f/mfy;
+    for(int i=0; i<N; i++)
+    {
+        mvP3M[i].x = (mvKeys[i].pt.x-mcx) * minvfx;
+        mvP3M[i].y = (mvKeys[i].pt.y-mcy) * minvfy;
+        float distanceR2 = mvP3M[i].x*mvP3M[i].x + mvP3M[i].y*mvP3M[i].y;
+        mvP3M[i].z = (1-beta*alpha*alpha*distanceR2) / (alpha*sqrt(1-(2*alpha-1)*beta*distanceR2) + 1-alpha);
+        if( isnan(mvP3M[i].z) )
+            mvP3M[i].z = (1-beta*alpha*alpha*distanceR2) / (1-alpha);
+        
+        cv::KeyPoint kp = mvKeys[i];
+        kp.pt.x=mvKeys[i].pt.x;
+        kp.pt.y=mvKeys[i].pt.y;
+        mvKeysUn[i]=kp;
     }
+    
 }
 
 void Frame::ComputeImageBounds(const cv::Mat &imLeft)
 {
-    if(mDistCoef.at<float>(0)!=0.0)
+    /*if(mDistCoef.at<float>(0)!=0.0)
     {
         cv::Mat mat(4,2,CV_32F);
         mat.at<float>(0,0)=0.0; mat.at<float>(0,1)=0.0;
@@ -445,16 +540,16 @@ void Frame::ComputeImageBounds(const cv::Mat &imLeft)
 
         // Undistort corners
         mat=mat.reshape(2);
-        cv::undistortPoints(mat,mat,mK,mDistCoef,cv::Mat(),mK);
+        cv::undistortPoints(mat,mat,mK,cv::Mat(),cv::Mat(),mK);
         mat=mat.reshape(1);
 
         mnMinX = min(mat.at<float>(0,0),mat.at<float>(2,0));
         mnMaxX = max(mat.at<float>(1,0),mat.at<float>(3,0));
         mnMinY = min(mat.at<float>(0,1),mat.at<float>(1,1));
         mnMaxY = max(mat.at<float>(2,1),mat.at<float>(3,1));
-
+        
     }
-    else
+    else*/
     {
         mnMinX = 0.0f;
         mnMaxX = imLeft.cols;

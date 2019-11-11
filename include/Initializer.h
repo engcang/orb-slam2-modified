@@ -49,7 +49,9 @@ private:
     void FindFundamental(vector<bool> &vbInliers, float &score, cv::Mat &F21);
 
     cv::Mat ComputeH21(const vector<cv::Point2f> &vP1, const vector<cv::Point2f> &vP2);
+    cv::Mat Compute3DH21(const vector<cv::Point3f> &vP1, const vector<cv::Point3f> &vP2);
     cv::Mat ComputeF21(const vector<cv::Point2f> &vP1, const vector<cv::Point2f> &vP2);
+    cv::Mat Compute3DF21(const vector<cv::Point3f> &vP1, const vector<cv::Point3f> &vP2);
 
     float CheckHomography(const cv::Mat &H21, const cv::Mat &H12, vector<bool> &vbMatchesInliers, float sigma);
 
@@ -62,21 +64,36 @@ private:
                       cv::Mat &R21, cv::Mat &t21, vector<cv::Point3f> &vP3D, vector<bool> &vbTriangulated, float minParallax, int minTriangulated);
 
     void Triangulate(const cv::KeyPoint &kp1, const cv::KeyPoint &kp2, const cv::Mat &P1, const cv::Mat &P2, cv::Mat &x3D);
+    
+    void TriangulateFisheye(const cv::Point3f &p1m, const cv::Point3f &p2m, const cv::Mat &P1, const cv::Mat &P2, cv::Mat &x3D);
 
     void Normalize(const vector<cv::KeyPoint> &vKeys, vector<cv::Point2f> &vNormalizedPoints, cv::Mat &T);
+    
+    void Normalize3D(const vector<cv::Point3f> &vP3M, vector<cv::Point3f> &vNormalizedPoints, cv::Mat &T);
 
     int CheckRT(const cv::Mat &R, const cv::Mat &t, const vector<cv::KeyPoint> &vKeys1, const vector<cv::KeyPoint> &vKeys2,
                        const vector<Match> &vMatches12, vector<bool> &vbInliers,
                        const cv::Mat &K, vector<cv::Point3f> &vP3D, float th2, vector<bool> &vbGood, float &parallax);
+    
+    int CheckRT3D(const cv::Mat &R, const cv::Mat &t, const vector<cv::Point3f> &vP3M1, const vector<cv::Point3f> &vP3M2,
+                       const vector<Match> &vMatches12, vector<bool> &vbInliers,
+                       vector<cv::Point3f> &vP3D, float th2, vector<bool> &vbGood, float &parallax);
 
     void DecomposeE(const cv::Mat &E, cv::Mat &R1, cv::Mat &R2, cv::Mat &t);
 
+    void ComputeLambdaH(const cv::Mat &H21, const cv::Mat &H12, const vector<cv::Point3f> &vP1, const vector<cv::Point3f> &vP2);
 
     // Keypoints from Reference Frame (Frame 1)
     vector<cv::KeyPoint> mvKeys1;
+    
+    // Fisheye monocular EUCM model, p=Km, m=[Mx,My,Mz] (Frame 1)
+    std::vector<cv::Point3f> mvP3M1;
 
     // Keypoints from Current Frame (Frame 2)
     vector<cv::KeyPoint> mvKeys2;
+    
+    // Fisheye monocular EUCM model, p=Km, m=[Mx,My,Mz] (Frame 2)
+    std::vector<cv::Point3f> mvP3M2;
 
     // Current Matches from Reference to Current
     vector<Match> mvMatches12;
@@ -84,7 +101,16 @@ private:
 
     // Calibration
     cv::Mat mK;
+    cv::Mat mDistCoef;
+    float mfAlpha;
+    float mfBeta;
+    
+    //EUCM model unprojection range
+    float mR2range;
 
+    //FoV 150, min of z
+    float mzMin;
+    
     // Standard Deviation and Variance
     float mSigma, mSigma2;
 
@@ -92,7 +118,9 @@ private:
     int mMaxIterations;
 
     // Ransac sets
-    vector<vector<size_t> > mvSets;   
+    vector<vector<size_t> > mvSets;
+
+    float mLambdaH12, mLambdaH21;   
 
 };
 

@@ -75,6 +75,23 @@ PnPsolver::PnPsolver(const Frame &F, const vector<MapPoint*> &vpMapPointMatches)
     mvKeyPointIndices.reserve(F.mvpMapPoints.size());
     mvAllIndices.reserve(F.mvpMapPoints.size());
 
+    const float alpha = F.mDistCoef.at<float>(0);
+    const float beta = F.mDistCoef.at<float>(1);
+
+    //max of FoV is 150 degrees, so we can find the solution of the equation
+    //const float coefA = 3*alpha*alpha*beta+2*alpha-1; //120 degrees coefiicient of equation
+    const float coefA = 13.928*alpha*alpha*beta+2*alpha-1; //150 degrees coefiicient of equation
+    const float coefB = 2-2*alpha;
+    const float coefC = -1;
+
+    //if( (coefB*coefB-4*coefA*coefC)<0 )
+    //    cout<<"equation error"<<endl;
+    
+    //const float mzMin = (-coefB + sqrt(coefB*coefB-4*coefA*coefC)) / (2*coefA)-0.1;
+
+    const float mzMin = 0.1;
+    cout<<"mzMin: "<<mzMin<<endl;
+
     int idx=0;
     for(size_t i=0, iend=vpMapPointMatches.size(); i<iend; i++)
     {
@@ -84,27 +101,38 @@ PnPsolver::PnPsolver(const Frame &F, const vector<MapPoint*> &vpMapPointMatches)
         {
             if(!pMP->isBad())
             {
-                const cv::KeyPoint &kp = F.mvKeysUn[i];
+                if(F.mvP3M[i].z >= mzMin)
+                {
+                    const cv::KeyPoint &kp = F.mvKeysUn[i];
 
-                mvP2D.push_back(kp.pt);
-                mvSigma2.push_back(F.mvLevelSigma2[kp.octave]);
+                    //mvP2D.push_back(kp.pt);
+                    cv::Point2f tempP2M( (F.mvP3M[i].x) / (F.mvP3M[i].z), (F.mvP3M[i].y) / (F.mvP3M[i].z) );
+                    mvP2D.push_back(tempP2M);
+                    mvSigma2.push_back(F.mvLevelSigma2[kp.octave]);
 
-                cv::Mat Pos = pMP->GetWorldPos();
-                mvP3Dw.push_back(cv::Point3f(Pos.at<float>(0),Pos.at<float>(1), Pos.at<float>(2)));
+                    cv::Mat Pos = pMP->GetWorldPos();
+                    mvP3Dw.push_back(cv::Point3f(Pos.at<float>(0),Pos.at<float>(1), Pos.at<float>(2)));
 
-                mvKeyPointIndices.push_back(i);
-                mvAllIndices.push_back(idx);               
+                    mvKeyPointIndices.push_back(i);
+                    mvAllIndices.push_back(idx);               
 
-                idx++;
+                    idx++;
+                }
+                
             }
         }
     }
 
     // Set camera calibration parameters
-    fu = F.fx;
+    /*fu = F.fx;
     fv = F.fy;
     uc = F.cx;
-    vc = F.cy;
+    vc = F.cy;*/
+
+    fu = 1;
+    fv = 1;
+    uc = 0;
+    vc = 0;
 
     SetRansacParameters();
 }
@@ -237,7 +265,10 @@ cv::Mat PnPsolver::iterate(int nIterations, bool &bNoMore, vector<bool> &vbInlie
 
         }
     }
-
+    cout<<"mnIterations: "<<mnIterations<<endl;
+    cout<<"mRansacMaxIts: "<<mRansacMaxIts<<endl;
+    cout<<"mnBestInliers: "<<mnBestInliers<<endl;
+    cout<<"mRansacMinInliers: "<<mRansacMinInliers<<endl;
     if(mnIterations>=mRansacMaxIts)
     {
         bNoMore=true;

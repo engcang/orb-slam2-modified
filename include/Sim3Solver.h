@@ -80,6 +80,10 @@ protected:
 
     int N;
     int mN1;
+    
+    // EUCM Model
+    float mfAlpha;
+    float mfBeta;
 
     // Current Estimation
     cv::Mat mR12i;

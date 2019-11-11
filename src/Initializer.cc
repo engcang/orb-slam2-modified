@@ -26,6 +26,7 @@
 #include "ORBmatcher.h"
 
 #include<thread>
+#include<cmath>
 
 namespace ORB_SLAM2
 {
@@ -33,12 +34,28 @@ namespace ORB_SLAM2
 Initializer::Initializer(const Frame &ReferenceFrame, float sigma, int iterations)
 {
     mK = ReferenceFrame.mK.clone();
-
+    mDistCoef = ReferenceFrame.mDistCoef.clone();
+    mfAlpha = mDistCoef.at<float>(0);
+    mfBeta = mDistCoef.at<float>(1);
+    
+    mR2range = 1.0f/(mfBeta*(2*mfAlpha-1));
+    
+    //cout<<"mR2range: "<<mR2range<<endl;
+    
     mvKeys1 = ReferenceFrame.mvKeysUn;
+    
+    mvP3M1 = ReferenceFrame.mvP3M;
 
     mSigma = sigma;
-    mSigma2 = sigma*sigma;
+    mSigma2 = 1.0f/(sigma*sigma);
     mMaxIterations = iterations;
+
+    //max of FoV is 150 degrees, so we can find the solution of the equation
+    const float coefA = 13.928*mfAlpha*mfAlpha*mfBeta+2*mfAlpha-1;  //150 degrees coefiicient of equation
+    const float coefB = 2-2*mfAlpha;
+    const float coefC = -1;
+
+    mzMin = (-coefB + sqrt(coefB*coefB-4*coefA*coefC)) / (2*coefA)-0.1;
 }
 
 bool Initializer::Initialize(const Frame &CurrentFrame, const vector<int> &vMatches12, cv::Mat &R21, cv::Mat &t21,
@@ -47,7 +64,9 @@ bool Initializer::Initialize(const Frame &CurrentFrame, const vector<int> &vMatc
     // Fill structures with current keypoints and matches with reference frame
     // Reference Frame: 1, Current Frame: 2
     mvKeys2 = CurrentFrame.mvKeysUn;
-
+    
+    mvP3M2 = CurrentFrame.mvP3M;
+    
     mvMatches12.clear();
     mvMatches12.reserve(mvKeys2.size());
     mvbMatched1.resize(mvKeys1.size());
@@ -107,14 +126,21 @@ bool Initializer::Initialize(const Frame &CurrentFrame, const vector<int> &vMatc
     // Wait until both threads have finished
     threadH.join();
     threadF.join();
-
+    
+    //FindHomography(vbMatchesInliersH, SH, H);
+    //FindFundamental(vbMatchesInliersF, SF, F);
+    
     // Compute ratio of scores
     float RH = SH/(SH+SF);
-
+    
+    //cout<< "SH: "<<SH<<endl;
+    //cout<< "SF: "<<SF<<endl;
+    cout<< "RH: "<<RH<<endl;
+    
     // Try to reconstruct from homography or fundamental depending on the ratio (0.40-0.45)
-    if(RH>0.40)
+    if(RH>0.4)
         return ReconstructH(vbMatchesInliersH,H,mK,R21,t21,vP3D,vbTriangulated,1.0,50);
-    else //if(pF_HF>0.6)
+    else //if(RH<0.4)
         return ReconstructF(vbMatchesInliersF,F,mK,R21,t21,vP3D,vbTriangulated,1.0,50);
 
     return false;
@@ -127,10 +153,14 @@ void Initializer::FindHomography(vector<bool> &vbMatchesInliers, float &score, c
     const int N = mvMatches12.size();
 
     // Normalize coordinates
-    vector<cv::Point2f> vPn1, vPn2;
+    //vector<cv::Point2f> vPn1, vPn2;
+    vector<cv::Point3f> vPn1, vPn2;
     cv::Mat T1, T2;
-    Normalize(mvKeys1,vPn1, T1);
-    Normalize(mvKeys2,vPn2, T2);
+    //Normalize(mvKeys1,vPn1, T1);
+    //Normalize(mvKeys2,vPn2, T2);
+    Normalize3D(mvP3M1, vPn1, T1);
+    Normalize3D(mvP3M2, vPn2, T2);
+    
     cv::Mat T2inv = T2.inv();
 
     // Best Results variables
@@ -138,12 +168,18 @@ void Initializer::FindHomography(vector<bool> &vbMatchesInliers, float &score, c
     vbMatchesInliers = vector<bool>(N,false);
 
     // Iteration variables
-    vector<cv::Point2f> vPn1i(8);
-    vector<cv::Point2f> vPn2i(8);
+    //vector<cv::Point2f> vPn1i(8);
+    //vector<cv::Point2f> vPn2i(8);
+    vector<cv::Point3f> vPn1i(8);
+    vector<cv::Point3f> vPn2i(8);
+
+    //vector<cv::Point3f> vPm1i(8);
+    //vector<cv::Point3f> vPm2i(8);
+    
     cv::Mat H21i, H12i;
     vector<bool> vbCurrentInliers(N,false);
     float currentScore;
-
+    
     // Perform all RANSAC iterations and save the solution with highest score
     for(int it=0; it<mMaxIterations; it++)
     {
@@ -151,17 +187,19 @@ void Initializer::FindHomography(vector<bool> &vbMatchesInliers, float &score, c
         for(size_t j=0; j<8; j++)
         {
             int idx = mvSets[it][j];
-
             vPn1i[j] = vPn1[mvMatches12[idx].first];
             vPn2i[j] = vPn2[mvMatches12[idx].second];
-        }
 
-        cv::Mat Hn = ComputeH21(vPn1i,vPn2i);
+            //vPm1i[j] = mvP3M1[mvMatches12[idx].first];
+            //vPm2i[j] = mvP3M2[mvMatches12[idx].second];
+        }
+        //cv::Mat Hn = ComputeH21(vPn1i,vPn2i);
+        cv::Mat Hn = Compute3DH21(vPn1i,vPn2i);
         H21i = T2inv*Hn*T1;
         H12i = H21i.inv();
-
+        //ComputeLambdaH(H21i, H12i, vPm1i, vPm2i);
         currentScore = CheckHomography(H21i, H12i, vbCurrentInliers, mSigma);
-
+        
         if(currentScore>score)
         {
             H21 = H21i.clone();
@@ -178,10 +216,14 @@ void Initializer::FindFundamental(vector<bool> &vbMatchesInliers, float &score, 
     const int N = vbMatchesInliers.size();
 
     // Normalize coordinates
-    vector<cv::Point2f> vPn1, vPn2;
+    //vector<cv::Point2f> vPn1, vPn2;
+    vector<cv::Point3f> vPn1, vPn2;
     cv::Mat T1, T2;
-    Normalize(mvKeys1,vPn1, T1);
-    Normalize(mvKeys2,vPn2, T2);
+    //Normalize(mvKeys1,vPn1, T1);
+    //Normalize(mvKeys2,vPn2, T2);
+    Normalize3D(mvP3M1, vPn1, T1);
+    Normalize3D(mvP3M2, vPn2, T2);
+    
     cv::Mat T2t = T2.t();
 
     // Best Results variables
@@ -189,8 +231,11 @@ void Initializer::FindFundamental(vector<bool> &vbMatchesInliers, float &score, 
     vbMatchesInliers = vector<bool>(N,false);
 
     // Iteration variables
-    vector<cv::Point2f> vPn1i(8);
-    vector<cv::Point2f> vPn2i(8);
+    //vector<cv::Point2f> vPn1i(8);
+    //vector<cv::Point2f> vPn2i(8);
+    vector<cv::Point3f> vPn1i(8);
+    vector<cv::Point3f> vPn2i(8);
+    
     cv::Mat F21i;
     vector<bool> vbCurrentInliers(N,false);
     float currentScore;
@@ -202,12 +247,12 @@ void Initializer::FindFundamental(vector<bool> &vbMatchesInliers, float &score, 
         for(int j=0; j<8; j++)
         {
             int idx = mvSets[it][j];
-
             vPn1i[j] = vPn1[mvMatches12[idx].first];
             vPn2i[j] = vPn2[mvMatches12[idx].second];
         }
-
-        cv::Mat Fn = ComputeF21(vPn1i,vPn2i);
+        
+        //cv::Mat Fn = ComputeF21(vPn1i,vPn2i);
+        cv::Mat Fn = Compute3DF21(vPn1i,vPn2i);
 
         F21i = T2t*Fn*T1;
 
@@ -265,6 +310,50 @@ cv::Mat Initializer::ComputeH21(const vector<cv::Point2f> &vP1, const vector<cv:
     return vt.row(8).reshape(0, 3);
 }
 
+cv::Mat Initializer::Compute3DH21(const vector<cv::Point3f> &vP1, const vector<cv::Point3f> &vP2)
+{
+    const int N = vP1.size();
+
+    cv::Mat A(2*N,9,CV_32F);
+
+    for(int i=0; i<N; i++)
+    {
+        const float u1 = vP1[i].x;
+        const float v1 = vP1[i].y;
+        const float w1 = vP1[i].z;
+        const float u2 = vP2[i].x;
+        const float v2 = vP2[i].y;
+        const float w2 = vP2[i].z;
+
+        A.at<float>(2*i,0) = 0.0;
+        A.at<float>(2*i,1) = 0.0;
+        A.at<float>(2*i,2) = 0.0;
+        A.at<float>(2*i,3) = -w2*u1;
+        A.at<float>(2*i,4) = -w2*v1;
+        A.at<float>(2*i,5) = -w2*w1;
+        A.at<float>(2*i,6) = v2*u1;
+        A.at<float>(2*i,7) = v2*v1;
+        A.at<float>(2*i,8) = v2*w1;
+
+        A.at<float>(2*i+1,0) = w2*u1;
+        A.at<float>(2*i+1,1) = w2*v1;
+        A.at<float>(2*i+1,2) = w2;
+        A.at<float>(2*i+1,3) = 0.0;
+        A.at<float>(2*i+1,4) = 0.0;
+        A.at<float>(2*i+1,5) = 0.0;
+        A.at<float>(2*i+1,6) = -u2*u1;
+        A.at<float>(2*i+1,7) = -u2*v1;
+        A.at<float>(2*i+1,8) = -u2*w1;
+
+    }
+    
+    cv::Mat u,w,vt;
+    
+    cv::SVDecomp(A,w,u,vt,cv::SVD::MODIFY_A | cv::SVD::FULL_UV);
+
+    return vt.row(8).reshape(0, 3);
+}
+
 cv::Mat Initializer::ComputeF21(const vector<cv::Point2f> &vP1,const vector<cv::Point2f> &vP2)
 {
     const int N = vP1.size();
@@ -287,6 +376,45 @@ cv::Mat Initializer::ComputeF21(const vector<cv::Point2f> &vP1,const vector<cv::
         A.at<float>(i,6) = u1;
         A.at<float>(i,7) = v1;
         A.at<float>(i,8) = 1;
+    }
+
+    cv::Mat u,w,vt;
+
+    cv::SVDecomp(A,w,u,vt,cv::SVD::MODIFY_A | cv::SVD::FULL_UV);
+
+    cv::Mat Fpre = vt.row(8).reshape(0, 3);
+
+    cv::SVDecomp(Fpre,w,u,vt,cv::SVD::MODIFY_A | cv::SVD::FULL_UV);
+
+    w.at<float>(2)=0;
+
+    return  u*cv::Mat::diag(w)*vt;
+}
+
+cv::Mat Initializer::Compute3DF21(const vector<cv::Point3f> &vP1, const vector<cv::Point3f> &vP2)
+{
+    const int N = vP1.size();
+
+    cv::Mat A(N,9,CV_32F);
+
+    for(int i=0; i<N; i++)
+    {
+        const float u1 = vP1[i].x;
+        const float v1 = vP1[i].y;
+        const float w1 = vP1[i].z;
+        const float u2 = vP2[i].x;
+        const float v2 = vP2[i].y;
+        const float w2 = vP2[i].z;
+
+        A.at<float>(i,0) = u2*u1;
+        A.at<float>(i,1) = u2*v1;
+        A.at<float>(i,2) = u2*w1;
+        A.at<float>(i,3) = v2*u1;
+        A.at<float>(i,4) = v2*v1;
+        A.at<float>(i,5) = v2*w1;
+        A.at<float>(i,6) = w2*u1;
+        A.at<float>(i,7) = w2*v1;
+        A.at<float>(i,8) = w2*w1;
     }
 
     cv::Mat u,w,vt;
@@ -332,32 +460,66 @@ float Initializer::CheckHomography(const cv::Mat &H21, const cv::Mat &H12, vecto
 
     const float th = 5.991;
 
-    const float invSigmaSquare = 1.0/(sigma*sigma);
+    //const float invSigmaSquare = 1.0/(sigma*sigma);
+
+    const float invSigmaSquare = sigma*sigma;      //using EUCM model change the dimension ( 1/pixel -> 1/fx ), sigma = fx
 
     for(int i=0; i<N; i++)
     {
         bool bIn = true;
 
-        const cv::KeyPoint &kp1 = mvKeys1[mvMatches12[i].first];
-        const cv::KeyPoint &kp2 = mvKeys2[mvMatches12[i].second];
+        //const cv::KeyPoint &kp1 = mvKeys1[mvMatches12[i].first];
+        //const cv::KeyPoint &kp2 = mvKeys2[mvMatches12[i].second];
 
-        const float u1 = kp1.pt.x;
-        const float v1 = kp1.pt.y;
-        const float u2 = kp2.pt.x;
-        const float v2 = kp2.pt.y;
+        const cv::Point3f &p1 = mvP3M1[mvMatches12[i].first];
+        const cv::Point3f &p2 = mvP3M2[mvMatches12[i].second];
+
+        const float u1 = p1.x;
+        const float v1 = p1.y;
+        const float w1 = p1.z;
+        const float u2 = p2.x;
+        const float v2 = p2.y;
+        const float w2 = p2.z;
 
         // Reprojection error in first image
         // x2in1 = H12*x2
 
-        const float w2in1inv = 1.0/(h31inv*u2+h32inv*v2+h33inv);
-        const float u2in1 = (h11inv*u2+h12inv*v2+h13inv)*w2in1inv;
-        const float v2in1 = (h21inv*u2+h22inv*v2+h23inv)*w2in1inv;
+        //const float w2in1inv = 1.0/(h31inv*u2+h32inv*v2+h33inv);
+        //const float u2in1 = (h11inv*u2+h12inv*v2+h13inv)*w2in1inv;
+        //const float v2in1 = (h21inv*u2+h22inv*v2+h23inv)*w2in1inv;
+        float u2in1 = h11inv*u2+h12inv*v2+h13inv*w2;
+        float v2in1 = h21inv*u2+h22inv*v2+h23inv*w2;
+        float w2in1 = h31inv*u2+h32inv*v2+h33inv*w2;
+        
+        cv::Mat x1a(3,1,CV_32F);
+        cv::Mat x1b(3,1,CV_32F);
+        x1a.at<float>(0,0) = u1;
+        x1a.at<float>(1,0) = v1;
+        x1a.at<float>(2,0) = w1;
+        x1b.at<float>(0,0) = u2in1;
+        x1b.at<float>(1,0) = v2in1;
+        x1b.at<float>(2,0) = w2in1;
+        
+        //lambda*x1 = H'*x2, lambda*x1a = x1b, lambda is computed by Least squares method
+        cv::Mat lambdaM1 = (x1a.t()*x1a).inv() * x1a.t() * x1b; 
+        float lambdaS1 = lambdaM1.at<float>(0,0);
+        //float lambdaS1 = mLambdaH12;
+        //cout << "lambda1: " << lambdaS1<<endl;
 
-        const float squareDist1 = (u1-u2in1)*(u1-u2in1)+(v1-v2in1)*(v1-v2in1);
+        u2in1 = u2in1/lambdaS1;
+        v2in1 = v2in1/lambdaS1;
+        w2in1 = w2in1/lambdaS1;
+        
+        //const float squareDist1 = (u1-u2in1)*(u1-u2in1)+(v1-v2in1)*(v1-v2in1);
+        //const float squareDist1 = (lambdaS1*u1-u2in1)*(lambdaS1*u1-u2in1)+(lambdaS1*v1-v2in1)*(lambdaS1*v1-v2in1)+(lambdaS1*w1-w2in1)*(lambdaS1*w1-w2in1);
+        const float squareDist1 = (u1-u2in1)*(u1-u2in1)+(v1-v2in1)*(v1-v2in1)+(w1-w2in1)*(w1-w2in1);
+        //const float squareDist1 = (lambdaS1*u1-u2in1)*(lambdaS1*u1-u2in1)+(lambdaS1*v1-v2in1)*(lambdaS1*v1-v2in1);
 
         const float chiSquare1 = squareDist1*invSigmaSquare;
 
-        if(chiSquare1>th)
+        //cout << "HchiSquare1: " << chiSquare1<<endl;
+        
+        if(chiSquare1>th || lambdaS1 <= 0)
             bIn = false;
         else
             score += th - chiSquare1;
@@ -365,15 +527,42 @@ float Initializer::CheckHomography(const cv::Mat &H21, const cv::Mat &H12, vecto
         // Reprojection error in second image
         // x1in2 = H21*x1
 
-        const float w1in2inv = 1.0/(h31*u1+h32*v1+h33);
-        const float u1in2 = (h11*u1+h12*v1+h13)*w1in2inv;
-        const float v1in2 = (h21*u1+h22*v1+h23)*w1in2inv;
+        //const float w1in2inv = 1.0/(h31*u1+h32*v1+h33);
+        //const float u1in2 = (h11*u1+h12*v1+h13)*w1in2inv;
+        //const float v1in2 = (h21*u1+h22*v1+h23)*w1in2inv;
+        float u1in2 = h11*u1+h12*v1+h13*w1;
+        float v1in2 = h21*u1+h22*v1+h23*w1;
+        float w1in2 = h31*u1+h32*v1+h33*w1;
+        
+        cv::Mat x2a(3,1,CV_32F);
+        cv::Mat x2b(3,1,CV_32F);
+        x2a.at<float>(0,0) = u2;
+        x2a.at<float>(1,0) = v2;
+        x2a.at<float>(2,0) = w2;
+        x2b.at<float>(0,0) = u1in2;
+        x2b.at<float>(1,0) = v1in2;
+        x2b.at<float>(2,0) = w1in2;
+        
+        //lambda*x2 = H*x1, lambda*x2a = x2b, lambda is computed by Least squares method
+        cv::Mat lambdaM2 = (x2a.t()*x2a).inv() * x2a.t() * x2b; 
+        float lambdaS2 = lambdaM2.at<float>(0,0);
+        //float lambdaS2 = mLambdaH21;
+        //cout << "lambda2: " << lambdaS2<<endl;
 
-        const float squareDist2 = (u2-u1in2)*(u2-u1in2)+(v2-v1in2)*(v2-v1in2);
+        u1in2 = u1in2/lambdaS2;
+        v1in2 = v1in2/lambdaS2;
+        w1in2 = w1in2/lambdaS2;
+
+        //const float squareDist2 = (u2-u1in2)*(u2-u1in2)+(v2-v1in2)*(v2-v1in2);
+        //const float squareDist2 = (lambdaS2*u2-u1in2)*(lambdaS2*u2-u1in2)+(lambdaS2*v2-v1in2)*(lambdaS2*v2-v1in2)+(lambdaS2*w2-w1in2)*(lambdaS2*w2-w1in2);
+        const float squareDist2 = (u2-u1in2)*(u2-u1in2)+(v2-v1in2)*(v2-v1in2)+(w2-w1in2)*(w2-w1in2);
+        //const float squareDist2 = (lambdaS2*u2-u1in2)*(lambdaS2*u2-u1in2)+(lambdaS2*v2-v1in2)*(lambdaS2*v2-v1in2);
 
         const float chiSquare2 = squareDist2*invSigmaSquare;
 
-        if(chiSquare2>th)
+        //cout << "HchiSquare2: " << chiSquare2<<endl;
+        
+        if(chiSquare2>th || lambdaS2 <= 0)
             bIn = false;
         else
             score += th - chiSquare2;
@@ -408,33 +597,47 @@ float Initializer::CheckFundamental(const cv::Mat &F21, vector<bool> &vbMatchesI
     const float th = 3.841;
     const float thScore = 5.991;
 
-    const float invSigmaSquare = 1.0/(sigma*sigma);
+    //const float invSigmaSquare = 1.0/(sigma*sigma);
+
+    const float invSigmaSquare = sigma*sigma;       //using EUCM model change the dimension ( 1/pixel-> 1/fx )   sigma = fx
 
     for(int i=0; i<N; i++)
     {
         bool bIn = true;
 
-        const cv::KeyPoint &kp1 = mvKeys1[mvMatches12[i].first];
-        const cv::KeyPoint &kp2 = mvKeys2[mvMatches12[i].second];
+        //const cv::KeyPoint &kp1 = mvKeys1[mvMatches12[i].first];
+        //const cv::KeyPoint &kp2 = mvKeys2[mvMatches12[i].second];
 
-        const float u1 = kp1.pt.x;
-        const float v1 = kp1.pt.y;
-        const float u2 = kp2.pt.x;
-        const float v2 = kp2.pt.y;
+        const cv::Point3f &p1 = mvP3M1[mvMatches12[i].first];
+        const cv::Point3f &p2 = mvP3M2[mvMatches12[i].second];
 
+        const float u1 = p1.x;
+        const float v1 = p1.y;
+        const float w1 = p1.z;
+        const float u2 = p2.x;
+        const float v2 = p2.y;
+        const float w2 = p2.z;
+        
         // Reprojection error in second image
         // l2=F21x1=(a2,b2,c2)
 
-        const float a2 = f11*u1+f12*v1+f13;
-        const float b2 = f21*u1+f22*v1+f23;
-        const float c2 = f31*u1+f32*v1+f33;
+        //const float a2 = f11*u1+f12*v1+f13;
+        //const float b2 = f21*u1+f22*v1+f23;
+        //const float c2 = f31*u1+f32*v1+f33;
+        const float a2 = f11*u1+f12*v1+f13*w1;
+        const float b2 = f21*u1+f22*v1+f23*w1;
+        const float c2 = f31*u1+f32*v1+f33*w1;
 
-        const float num2 = a2*u2+b2*v2+c2;
+        //const float num2 = a2*u2+b2*v2+c2;
+        const float num2 = a2*u2+b2*v2+c2*w2;
 
-        const float squareDist1 = num2*num2/(a2*a2+b2*b2);
+        //const float squareDist1 = num2*num2/(a2*a2+b2*b2);
+        const float squareDist1 = num2*num2/(a2*a2+b2*b2+c2*c2);
 
         const float chiSquare1 = squareDist1*invSigmaSquare;
 
+        //cout << "FchiSquare1: " << chiSquare1<<endl;
+        
         if(chiSquare1>th)
             bIn = false;
         else
@@ -443,16 +646,23 @@ float Initializer::CheckFundamental(const cv::Mat &F21, vector<bool> &vbMatchesI
         // Reprojection error in second image
         // l1 =x2tF21=(a1,b1,c1)
 
-        const float a1 = f11*u2+f21*v2+f31;
-        const float b1 = f12*u2+f22*v2+f32;
-        const float c1 = f13*u2+f23*v2+f33;
+        //const float a1 = f11*u2+f21*v2+f31;
+        //const float b1 = f12*u2+f22*v2+f32;
+        //const float c1 = f13*u2+f23*v2+f33;
+        const float a1 = f11*u2+f21*v2+f31*w2;
+        const float b1 = f12*u2+f22*v2+f32*w2;
+        const float c1 = f13*u2+f23*v2+f33*w2;
 
-        const float num1 = a1*u1+b1*v1+c1;
+        //const float num1 = a1*u1+b1*v1+c1;
+        const float num1 = a1*u1+b1*v1+c1*w1;
 
-        const float squareDist2 = num1*num1/(a1*a1+b1*b1);
+        //const float squareDist2 = num1*num1/(a1*a1+b1*b1);
+        const float squareDist2 = num1*num1/(a1*a1+b1*b1+c1*c1);
 
         const float chiSquare2 = squareDist2*invSigmaSquare;
 
+        //cout << "FchiSquare2: " << chiSquare2<<endl;
+        
         if(chiSquare2>th)
             bIn = false;
         else
@@ -476,13 +686,14 @@ bool Initializer::ReconstructF(vector<bool> &vbMatchesInliers, cv::Mat &F21, cv:
             N++;
 
     // Compute Essential Matrix from Fundamental Matrix
-    cv::Mat E21 = K.t()*F21*K;
+    //cv::Mat E21 = K.t()*F21*K;
+    cv::Mat E21 = F21;
 
     cv::Mat R1, R2, t;
 
     // Recover the 4 motion hypotheses
     DecomposeE(E21,R1,R2,t);  
-
+    
     cv::Mat t1=t;
     cv::Mat t2=-t;
 
@@ -491,11 +702,16 @@ bool Initializer::ReconstructF(vector<bool> &vbMatchesInliers, cv::Mat &F21, cv:
     vector<bool> vbTriangulated1,vbTriangulated2,vbTriangulated3, vbTriangulated4;
     float parallax1,parallax2, parallax3, parallax4;
 
-    int nGood1 = CheckRT(R1,t1,mvKeys1,mvKeys2,mvMatches12,vbMatchesInliers,K, vP3D1, 4.0*mSigma2, vbTriangulated1, parallax1);
+    /*int nGood1 = CheckRT(R1,t1,mvKeys1,mvKeys2,mvMatches12,vbMatchesInliers,K, vP3D1, 4.0*mSigma2, vbTriangulated1, parallax1);
     int nGood2 = CheckRT(R2,t1,mvKeys1,mvKeys2,mvMatches12,vbMatchesInliers,K, vP3D2, 4.0*mSigma2, vbTriangulated2, parallax2);
     int nGood3 = CheckRT(R1,t2,mvKeys1,mvKeys2,mvMatches12,vbMatchesInliers,K, vP3D3, 4.0*mSigma2, vbTriangulated3, parallax3);
-    int nGood4 = CheckRT(R2,t2,mvKeys1,mvKeys2,mvMatches12,vbMatchesInliers,K, vP3D4, 4.0*mSigma2, vbTriangulated4, parallax4);
-
+    int nGood4 = CheckRT(R2,t2,mvKeys1,mvKeys2,mvMatches12,vbMatchesInliers,K, vP3D4, 4.0*mSigma2, vbTriangulated4, parallax4);*/
+    
+    int nGood1 = CheckRT3D(R1,t1,mvP3M1,mvP3M2,mvMatches12,vbMatchesInliers, vP3D1, 4.0*mSigma2, vbTriangulated1, parallax1);
+    int nGood2 = CheckRT3D(R2,t1,mvP3M1,mvP3M2,mvMatches12,vbMatchesInliers, vP3D2, 4.0*mSigma2, vbTriangulated2, parallax2);
+    int nGood3 = CheckRT3D(R1,t2,mvP3M1,mvP3M2,mvMatches12,vbMatchesInliers, vP3D3, 4.0*mSigma2, vbTriangulated3, parallax3);
+    int nGood4 = CheckRT3D(R2,t2,mvP3M1,mvP3M2,mvMatches12,vbMatchesInliers, vP3D4, 4.0*mSigma2, vbTriangulated4, parallax4);
+    
     int maxGood = max(nGood1,max(nGood2,max(nGood3,nGood4)));
 
     R21 = cv::Mat();
@@ -581,8 +797,9 @@ bool Initializer::ReconstructH(vector<bool> &vbMatchesInliers, cv::Mat &H21, cv:
     // Motion and structure from motion in a piecewise planar environment.
     // International Journal of Pattern Recognition and Artificial Intelligence, 1988
 
-    cv::Mat invK = K.inv();
-    cv::Mat A = invK*H21*K;
+    //cv::Mat invK = K.inv();
+    //cv::Mat A = invK*H21*K;
+    cv::Mat A = H21;
 
     cv::Mat U,w,Vt,V;
     cv::SVD::compute(A,w,U,Vt,cv::SVD::FULL_UV);
@@ -700,7 +917,8 @@ bool Initializer::ReconstructH(vector<bool> &vbMatchesInliers, cv::Mat &H21, cv:
         float parallaxi;
         vector<cv::Point3f> vP3Di;
         vector<bool> vbTriangulatedi;
-        int nGood = CheckRT(vR[i],vt[i],mvKeys1,mvKeys2,mvMatches12,vbMatchesInliers,K,vP3Di, 4.0*mSigma2, vbTriangulatedi, parallaxi);
+        //int nGood = CheckRT(vR[i],vt[i],mvKeys1,mvKeys2,mvMatches12,vbMatchesInliers,K,vP3Di, 4.0*mSigma2, vbTriangulatedi, parallaxi);
+        int nGood = CheckRT3D(vR[i],vt[i],mvP3M1,mvP3M2,mvMatches12,vbMatchesInliers,vP3Di, 4.0*mSigma2, vbTriangulatedi, parallaxi);
 
         if(nGood>bestGood)
         {
@@ -739,6 +957,21 @@ void Initializer::Triangulate(const cv::KeyPoint &kp1, const cv::KeyPoint &kp2, 
     A.row(1) = kp1.pt.y*P1.row(2)-P1.row(1);
     A.row(2) = kp2.pt.x*P2.row(2)-P2.row(0);
     A.row(3) = kp2.pt.y*P2.row(2)-P2.row(1);
+
+    cv::Mat u,w,vt;
+    cv::SVD::compute(A,w,u,vt,cv::SVD::MODIFY_A| cv::SVD::FULL_UV);
+    x3D = vt.row(3).t();
+    x3D = x3D.rowRange(0,3)/x3D.at<float>(3);
+}
+
+void Initializer::TriangulateFisheye(const cv::Point3f &p1m, const cv::Point3f &p2m, const cv::Mat &P1, const cv::Mat &P2, cv::Mat &x3D)
+{
+    cv::Mat A(4,4,CV_32F);
+
+    A.row(0) = p1m.x*P1.row(2)-p1m.z*P1.row(0);
+    A.row(1) = p1m.y*P1.row(2)-p1m.z*P1.row(1);
+    A.row(2) = p2m.x*P2.row(2)-p2m.z*P2.row(0);
+    A.row(3) = p2m.y*P2.row(2)-p2m.z*P2.row(1);
 
     cv::Mat u,w,vt;
     cv::SVD::compute(A,w,u,vt,cv::SVD::MODIFY_A| cv::SVD::FULL_UV);
@@ -794,6 +1027,54 @@ void Initializer::Normalize(const vector<cv::KeyPoint> &vKeys, vector<cv::Point2
     T.at<float>(1,2) = -meanY*sY;
 }
 
+void Initializer::Normalize3D(const vector<cv::Point3f> &vP3M, vector<cv::Point3f> &vNormalizedPoints, cv::Mat &T)
+{
+    float meanX = 0;
+    float meanY = 0;
+    const int N = vP3M.size();
+
+    vNormalizedPoints.resize(N);
+
+    for(int i=0; i<N; i++)
+    {
+        meanX += vP3M[i].x;
+        meanY += vP3M[i].y;
+    }
+
+    meanX = meanX/N;
+    meanY = meanY/N;
+    
+    float meanDevX = 0;
+    float meanDevY = 0;
+
+    for(int i=0; i<N; i++)
+    {
+        vNormalizedPoints[i].x = vP3M[i].x - meanX*vP3M[i].z;
+        vNormalizedPoints[i].y = vP3M[i].y - meanY*vP3M[i].z;
+        vNormalizedPoints[i].z = vP3M[i].z;
+        
+        meanDevX += fabs(vNormalizedPoints[i].x);
+        meanDevY += fabs(vNormalizedPoints[i].y);
+    }
+    
+    meanDevX = meanDevX/N;
+    meanDevY = meanDevY/N;
+    
+    float sX = 1.0/meanDevX;
+    float sY = 1.0/meanDevY;
+
+    for(int i=0; i<N; i++)
+    {
+        vNormalizedPoints[i].x = vNormalizedPoints[i].x * sX;
+        vNormalizedPoints[i].y = vNormalizedPoints[i].y * sY;
+    }
+    
+    T = cv::Mat::eye(3,3,CV_32F);
+    T.at<float>(0,0) = sX;
+    T.at<float>(1,1) = sY;
+    T.at<float>(0,2) = -meanX*sX;
+    T.at<float>(1,2) = -meanY*sY;
+}
 
 int Initializer::CheckRT(const cv::Mat &R, const cv::Mat &t, const vector<cv::KeyPoint> &vKeys1, const vector<cv::KeyPoint> &vKeys2,
                        const vector<Match> &vMatches12, vector<bool> &vbMatchesInliers,
@@ -906,6 +1187,147 @@ int Initializer::CheckRT(const cv::Mat &R, const cv::Mat &t, const vector<cv::Ke
     return nGood;
 }
 
+int Initializer::CheckRT3D(const cv::Mat &R, const cv::Mat &t, const vector<cv::Point3f> &vP3M1, const vector<cv::Point3f> &vP3M2,
+                       const vector<Match> &vMatches12, vector<bool> &vbMatchesInliers,
+                       vector<cv::Point3f> &vP3D, float th2, vector<bool> &vbGood, float &parallax)
+{
+    cv::Mat K = cv::Mat::eye(3,3,CV_32F);
+    
+    vbGood = vector<bool>(vP3M1.size(),false);
+    vP3D.resize(vP3M1.size());
+
+    vector<float> vCosParallax;
+    vCosParallax.reserve(vP3M1.size());
+
+    // Camera 1 Projection Matrix K[I|0]
+    cv::Mat P1(3,4,CV_32F,cv::Scalar(0));
+    K.copyTo(P1.rowRange(0,3).colRange(0,3));
+
+    cv::Mat O1 = cv::Mat::zeros(3,1,CV_32F);
+
+    // Camera 2 Projection Matrix K[R|t]
+    cv::Mat P2(3,4,CV_32F);
+    R.copyTo(P2.rowRange(0,3).colRange(0,3));
+    t.copyTo(P2.rowRange(0,3).col(3));
+    P2 = K*P2;
+
+    cv::Mat O2 = -R.t()*t;
+
+    int nGood=0;
+    
+    for(size_t i=0, iend=vMatches12.size();i<iend;i++)
+    {
+        if(!vbMatchesInliers[i])
+            continue;
+        
+        const cv::Point3f &p1m = vP3M1[vMatches12[i].first];
+        const cv::Point3f &p2m = vP3M2[vMatches12[i].second];
+        cv::Mat p3dC1;
+        
+        TriangulateFisheye(p1m, p2m, P1, P2, p3dC1);
+        
+        if(!isfinite(p3dC1.at<float>(0)) || !isfinite(p3dC1.at<float>(1)) || !isfinite(p3dC1.at<float>(2)))
+        {
+            vbGood[vMatches12[i].first]=false;
+            continue;
+        }
+        
+        // Check parallax
+        cv::Mat normal1 = p3dC1 - O1;
+        float dist1 = cv::norm(normal1);
+
+        cv::Mat normal2 = p3dC1 - O2;
+        float dist2 = cv::norm(normal2);
+
+        float cosParallax = normal1.dot(normal2)/(dist1*dist2);
+        
+        // Check depth in front of first camera (only if enough parallax, as "infinite" points can easily go to negative depth)
+        if(p3dC1.at<float>(2)<=0 && cosParallax<0.99998)
+            continue;
+        
+        // Check depth in front of second camera (only if enough parallax, as "infinite" points can easily go to negative depth)
+        cv::Mat p3dC2 = R*p3dC1+t;
+
+        if(p3dC2.at<float>(2)<=0 && cosParallax<0.99998)
+            continue;
+        
+        // Check reprojection error in first image
+        float im1x, im1y;
+        float im1z;
+        float p3dC1x = p3dC1.at<float>(0);
+        float p3dC1y = p3dC1.at<float>(1);
+        float p3dC1z = p3dC1.at<float>(2);
+        float im1d = sqrt( mfBeta*(p3dC1x*p3dC1x+p3dC1y*p3dC1y) + p3dC1z*p3dC1z );
+        
+        im1x = p3dC1x / ( mfAlpha*im1d + (1-mfAlpha)*p3dC1z );
+        im1y = p3dC1y / ( mfAlpha*im1d + (1-mfAlpha)*p3dC1z );
+        
+        float distance1R2 = im1x*im1x + im1y*im1y;
+        //EUCM model unprojection range, R2 = Mx^2+My^2
+        if(distance1R2>mR2range)
+        {
+            cout<<"out of the range"<<endl;
+            continue;
+        }
+
+        im1z = ( 1-mfBeta*mfAlpha*mfAlpha*distance1R2 )/( mfAlpha*sqrt( 1-(2*mfAlpha-1)*mfBeta*distance1R2 ) + 1-mfAlpha );
+        
+        float squareError1 = (im1x-p1m.x)*(im1x-p1m.x)+(im1y-p1m.y)*(im1y-p1m.y)+(im1z-p1m.z)*(im1z-p1m.z);
+        
+        //cout << "Trangulate squareError1: " << squareError1<<endl;
+        
+        if(squareError1>th2)
+            continue;
+        
+        // Check reprojection error in second image
+        float im2x, im2y;
+        float im2z;
+        float p3dC2x = p3dC2.at<float>(0);
+        float p3dC2y = p3dC2.at<float>(1);
+        float p3dC2z = p3dC2.at<float>(2);
+        float im2d = sqrt( mfBeta*(p3dC2x*p3dC2x+p3dC2y*p3dC2y) + p3dC2z*p3dC2z );
+        
+        im2x = p3dC2x / ( mfAlpha*im2d + (1-mfAlpha)*p3dC2z );
+        im2y = p3dC2y / ( mfAlpha*im2d + (1-mfAlpha)*p3dC2z );
+        float distance2R2 = im2x*im2x + im2y*im2y;
+
+        //EUCM model unprojection range, R2 = Mx^2+My^2
+        if(distance2R2>mR2range)
+        {
+            cout<<"out of the range"<<endl;
+            continue;
+        }
+
+        im2z = ( 1-mfBeta*mfAlpha*mfAlpha*distance2R2 )/( mfAlpha*sqrt( 1-(2*mfAlpha-1)*mfBeta*distance2R2 ) + 1-mfAlpha );
+        
+        float squareError2 = (im2x-p2m.x)*(im2x-p2m.x)+(im2y-p2m.y)*(im2y-p2m.y)+(im2z-p2m.z)*(im2z-p2m.z);
+        
+        //cout << "Trangulate squareError2: " << squareError2<<endl;
+        
+        if(squareError2>th2)
+            continue;
+        
+        vCosParallax.push_back(cosParallax);
+        vP3D[vMatches12[i].first] = cv::Point3f(p3dC1.at<float>(0),p3dC1.at<float>(1),p3dC1.at<float>(2));
+        nGood++;
+
+        if(cosParallax<0.99998)
+            vbGood[vMatches12[i].first]=true;
+    }
+    
+    if(nGood>0)
+    {
+        sort(vCosParallax.begin(),vCosParallax.end());
+
+        size_t idx = min(50,int(vCosParallax.size()-1));
+        parallax = acos(vCosParallax[idx])*180/CV_PI;
+    }
+    else
+        parallax=0;
+    
+    return nGood;
+}
+
 void Initializer::DecomposeE(const cv::Mat &E, cv::Mat &R1, cv::Mat &R2, cv::Mat &t)
 {
     cv::Mat u,w,vt;
@@ -926,6 +1348,84 @@ void Initializer::DecomposeE(const cv::Mat &E, cv::Mat &R1, cv::Mat &R2, cv::Mat
     R2 = u*W.t()*vt;
     if(cv::determinant(R2)<0)
         R2=-R2;
+}
+
+void Initializer::ComputeLambdaH(const cv::Mat &H21, const cv::Mat &H12, const vector<cv::Point3f> &vP1, const vector<cv::Point3f> &vP2)
+{
+    mLambdaH12 = 0;
+    mLambdaH21 = 0;
+
+    const int N = vP1.size();
+
+    cv::Mat A1(3,1,CV_32F);
+    cv::Mat B1(3,1,CV_32F);
+    cv::Mat A2(3,1,CV_32F);
+    cv::Mat B2(3,1,CV_32F);
+
+    const float h11 = H21.at<float>(0,0);
+    const float h12 = H21.at<float>(0,1);
+    const float h13 = H21.at<float>(0,2);
+    const float h21 = H21.at<float>(1,0);
+    const float h22 = H21.at<float>(1,1);
+    const float h23 = H21.at<float>(1,2);
+    const float h31 = H21.at<float>(2,0);
+    const float h32 = H21.at<float>(2,1);
+    const float h33 = H21.at<float>(2,2);
+
+    const float h11inv = H12.at<float>(0,0);
+    const float h12inv = H12.at<float>(0,1);
+    const float h13inv = H12.at<float>(0,2);
+    const float h21inv = H12.at<float>(1,0);
+    const float h22inv = H12.at<float>(1,1);
+    const float h23inv = H12.at<float>(1,2);
+    const float h31inv = H12.at<float>(2,0);
+    const float h32inv = H12.at<float>(2,1);
+    const float h33inv = H12.at<float>(2,2);
+
+    for(int i=0; i<N; i++)
+    {
+        const float u1 = vP1[i].x;
+        const float v1 = vP1[i].y;
+        const float w1 = vP1[i].z;
+        const float u2 = vP2[i].x;
+        const float v2 = vP2[i].y;
+        const float w2 = vP2[i].z;
+
+        const float u2in1 = h11inv*u2+h12inv*v2+h13inv*w2;
+        const float v2in1 = h21inv*u2+h22inv*v2+h23inv*w2;
+        const float w2in1 = h31inv*u2+h32inv*v2+h33inv*w2;
+
+        A1.at<float>(0,0) = u1;
+        A1.at<float>(1,0) = v1;
+        A1.at<float>(2,0) = w1;
+        B1.at<float>(0,0) = u2in1;
+        B1.at<float>(1,0) = v2in1;
+        B1.at<float>(2,0) = w2in1;
+
+        cv::Mat lambdaM1 = (A1.t()*A1).inv() * A1.t() *B1;     // A1*lambdaM1 = B1
+        mLambdaH12 += lambdaM1.at<float>(0,0);
+
+        const float u1in2 = h11*u1+h12*v1+h13*w1;
+        const float v1in2 = h21*u1+h22*v1+h23*w1;
+        const float w1in2 = h31*u1+h32*v1+h33*w1;
+
+        A2.at<float>(0,0) = u2;
+        A2.at<float>(1,0) = v2;
+        A2.at<float>(2,0) = w2;
+        B2.at<float>(0,0) = u1in2;
+        B2.at<float>(1,0) = v1in2;
+        B2.at<float>(2,0) = w1in2;
+
+        cv::Mat lambdaM2 = (A2.t()*A2).inv() * A2.t() *B2;    // A2*lambdaM2 = B2
+        mLambdaH21 += lambdaM2.at<float>(0,0);
+    }
+
+    mLambdaH12 = mLambdaH12/N;
+    mLambdaH21 = mLambdaH21/N;
+
+    //cout<<"mLambdaH12: "<<mLambdaH12<<endl;
+    //cout<<"mLambdaH21: "<<mLambdaH21<<endl;
+
 }
 
 } //namespace ORB_SLAM

@@ -28,11 +28,11 @@
 #include "Thirdparty/g2o/g2o/solvers/linear_solver_dense.h"
 #include "Thirdparty/g2o/g2o/types/types_seven_dof_expmap.h"
 
-#include <Eigen/StdVector>
+#include<Eigen/StdVector>
 
 #include "Converter.h"
 
-#include <mutex>
+#include<mutex>
 
 namespace ORB_SLAM2
 {
@@ -98,7 +98,7 @@ void Optimizer::BundleAdjustment(const vector<KeyFrame *> &vpKFs, const vector<M
         vPoint->setMarginalized(true);
         optimizer.addVertex(vPoint);
 
-       const map<KeyFrame*,size_t> observations = pMP->GetObservations();
+        const map<KeyFrame*,size_t> observations = pMP->GetObservations();
 
         int nEdges = 0;
         //SET EDGES
@@ -137,6 +137,8 @@ void Optimizer::BundleAdjustment(const vector<KeyFrame *> &vpKFs, const vector<M
                 e->fy = pKF->fy;
                 e->cx = pKF->cx;
                 e->cy = pKF->cy;
+                e->alpha = (pKF->mDistCoef).at<float>(0);
+                e->beta = (pKF->mDistCoef).at<float>(1);
 
                 optimizer.addEdge(e);
             }
@@ -307,6 +309,8 @@ int Optimizer::PoseOptimization(Frame *pFrame)
                 e->fy = pFrame->fy;
                 e->cx = pFrame->cx;
                 e->cy = pFrame->cy;
+                e->alpha = (pFrame->mDistCoef).at<float>(0);
+                e->beta = (pFrame->mDistCoef).at<float>(1);
                 cv::Mat Xw = pMP->GetWorldPos();
                 e->Xw[0] = Xw.at<float>(0);
                 e->Xw[1] = Xw.at<float>(1);
@@ -612,6 +616,8 @@ void Optimizer::LocalBundleAdjustment(KeyFrame *pKF, bool* pbStopFlag, Map* pMap
                     e->fy = pKFi->fy;
                     e->cx = pKFi->cx;
                     e->cy = pKFi->cy;
+                    e->alpha = (pKFi->mDistCoef).at<float>(0);
+                    e->beta = (pKFi->mDistCoef).at<float>(1);
 
                     optimizer.addEdge(e);
                     vpEdgesMono.push_back(e);
@@ -1152,6 +1158,8 @@ int Optimizer::OptimizeSim3(KeyFrame *pKF1, KeyFrame *pKF2, vector<MapPoint *> &
         g2o::RobustKernelHuber* rk1 = new g2o::RobustKernelHuber;
         e12->setRobustKernel(rk1);
         rk1->setDelta(deltaHuber);
+        e12->alpha = pKF1->mDistCoef.at<float>(0);
+        e12->beta = pKF1->mDistCoef.at<float>(1);
         optimizer.addEdge(e12);
 
         // Set edge x2 = S21*X1
@@ -1170,6 +1178,8 @@ int Optimizer::OptimizeSim3(KeyFrame *pKF1, KeyFrame *pKF2, vector<MapPoint *> &
         g2o::RobustKernelHuber* rk2 = new g2o::RobustKernelHuber;
         e21->setRobustKernel(rk2);
         rk2->setDelta(deltaHuber);
+        e21->alpha = pKF2->mDistCoef.at<float>(0);
+        e21->beta = pKF2->mDistCoef.at<float>(1);
         optimizer.addEdge(e21);
 
         vpEdges12.push_back(e12);

@@ -33,13 +33,13 @@
 #include "LoopClosing.h"
 #include "KeyFrameDatabase.h"
 #include "ORBVocabulary.h"
+#include <unistd.h> // added for 18.04, to use usleep
+#include "Converter.h"
 // #include "Viewer.h"
-#include <unistd.h> // added for 18.04, usleep
 
 namespace ORB_SLAM2
 {
 
-// class Viewer;
 class FrameDrawer;
 class Map;
 class Tracking;
@@ -59,7 +59,6 @@ public:
 public:
 
     // Initialize the SLAM system. It launches the Local Mapping, Loop Closing and Viewer threads.
-    // System(const string &strVocFile, const string &strSettingsFile, const eSensor sensor, const bool bUseViewer = true);
     System(const string &strVocFile, const string &strSettingsFile, const eSensor sensor);
 
     // Proccess the given stereo frame. Images must be synchronized and rectified.
@@ -122,10 +121,8 @@ public:
     int GetTrackingState();
     std::vector<MapPoint*> GetTrackedMapPoints();
     std::vector<cv::KeyPoint> GetTrackedKeyPointsUn();
-
     cv::Mat getimage(); //added to remove viewer by EungChang
-    cv::Mat getvel(); // added to use for Kalman filter by EungChang
-    
+
 private:
 
     // Input sensor
@@ -153,16 +150,13 @@ private:
     LoopClosing* mpLoopCloser;
 
     // The viewer draws the map and the current camera pose. It uses Pangolin.
-    // Viewer* mpViewer;
 
     FrameDrawer* mpFrameDrawer;
-    // MapDrawer* mpMapDrawer;
 
     // System threads: Local Mapping, Loop Closing, Viewer.
     // The Tracking thread "lives" in the main execution thread that creates the System object.
     std::thread* mptLocalMapping;
     std::thread* mptLoopClosing;
-    // std::thread* mptViewer;
 
     // Reset flag
     std::mutex mMutexReset;
