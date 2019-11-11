@@ -46,7 +46,7 @@ ${EIGEN3_INCLUDE_DIR}
 
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/lib)
 
-add_library(${PROJECT_NAME} SHARED
+add_library(fishORB SHARED
 src/System.cc
 src/Tracking.cc
 src/LocalMapping.cc
@@ -67,7 +67,7 @@ src/Initializer.cc
 #src/Viewer.cc
 )
 
-target_link_libraries(${PROJECT_NAME}
+target_link_libraries(fishORB
 ${OpenCV_LIBS}
 ${EIGEN3_LIBS}
 ${PROJECT_SOURCE_DIR}/Thirdparty/DBoW2/lib/libDBoW2.so
@@ -78,9 +78,9 @@ ${PROJECT_SOURCE_DIR}/Thirdparty/g2o/lib/libg2o.so
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/Examples/Stereo)
 
-add_executable(stereo_euroc
-Examples/Stereo/stereo_euroc.cc)
-target_link_libraries(stereo_euroc ${PROJECT_NAME})
+ add_executable(stereo_fish
+ Examples/Stereo/stereo_fish.cc)
+ target_link_libraries(stereo_fish fishORB)
 
 # Build tools
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/tools)
