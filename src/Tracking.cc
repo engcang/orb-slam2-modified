@@ -43,13 +43,10 @@ using namespace std;
 namespace ORB_SLAM2
 {
 
-// Tracking::Tracking(System *pSys, ORBVocabulary* pVoc, FrameDrawer *pFrameDrawer, MapDrawer *pMapDrawer, Map *pMap, KeyFrameDatabase* pKFDB, const string &strSettingPath, const int sensor):
-//     mState(NO_IMAGES_YET), mSensor(sensor), mbOnlyTracking(false), mbVO(false), mpORBVocabulary(pVoc),
-//     mpKeyFrameDB(pKFDB), mpInitializer(static_cast<Initializer*>(NULL)), mpSystem(pSys), mpViewer(NULL),
-//     mpFrameDrawer(pFrameDrawer), mpMapDrawer(pMapDrawer), mpMap(pMap), mnLastRelocFrameId(0)
-Tracking::Tracking(System *pSys, ORBVocabulary* pVoc, FrameDrawer *pFrameDrawer, Map *pMap, KeyFrameDatabase* pKFDB, const string &strSettingPath, const int sensor):
-    mState(NO_IMAGES_YET), mSensor(sensor), mbOnlyTracking(false), mbVO(false), mpORBVocabulary(pVoc), mpKeyFrameDB(pKFDB), 
-    mpInitializer(static_cast<Initializer*>(NULL)), mpSystem(pSys), mpFrameDrawer(pFrameDrawer), mpMap(pMap), mnLastRelocFrameId(0)
+Tracking::Tracking(System *pSys, ORBVocabulary* pVoc, FrameDrawer *pFrameDrawer, MapDrawer *pMapDrawer, Map *pMap, KeyFrameDatabase* pKFDB, const string &strSettingPath, const int sensor, bool bReuseMap):
+    mState(NO_IMAGES_YET), mSensor(sensor), mbOnlyTracking(false), mbVO(false), mpORBVocabulary(pVoc),
+    mpKeyFrameDB(pKFDB), mpInitializer(static_cast<Initializer*>(NULL)), mpSystem(pSys), mpViewer(NULL),
+    mpFrameDrawer(pFrameDrawer), mpMapDrawer(pMapDrawer), mpMap(pMap), mnLastRelocFrameId(0)
 {
     // Load camera parameters from settings file
 
@@ -148,7 +145,8 @@ Tracking::Tracking(System *pSys, ORBVocabulary* pVoc, FrameDrawer *pFrameDrawer,
         else
             mDepthMapFactor = 1.0f/mDepthMapFactor;
     }
-
+    if (bReuseMap)
+        mState = LOST;
 }
 
 void Tracking::SetLocalMapper(LocalMapping *pLocalMapper)
@@ -161,10 +159,10 @@ void Tracking::SetLoopClosing(LoopClosing *pLoopClosing)
     mpLoopClosing=pLoopClosing;
 }
 
-// void Tracking::SetViewer(Viewer *pViewer)
-// {
-//     mpViewer=pViewer;
-// }
+void Tracking::SetViewer(Viewer *pViewer)
+{
+    mpViewer=pViewer;
+}
 
 
 cv::Mat Tracking::GrabImageStereo(const cv::Mat &imRectLeft, const cv::Mat &imRectRight, const double &timestamp)
@@ -434,7 +432,7 @@ void Tracking::Track()
             else
                 mVelocity = cv::Mat();
 
-            // mpMapDrawer->SetCurrentCameraPose(mCurrentFrame.mTcw);
+            mpMapDrawer->SetCurrentCameraPose(mCurrentFrame.mTcw);
 
             // Clean VO matches
             for(int i=0; i<mCurrentFrame.N; i++)
@@ -471,11 +469,6 @@ void Tracking::Track()
             }
         }
 
-        // if (mlRelativeFramePoses.size() < 2)
-        // {
-        //     cout << "mlRelativeFramePoses size less than 2" << endl;
-        //     return;
-        // }
         // Reset if the camera get lost soon after initialization
         if(mState==LOST)
         {
@@ -505,11 +498,13 @@ void Tracking::Track()
     else
     {
         // This can happen if tracking is lost
-        mlRelativeFramePoses.push_back(mlRelativeFramePoses.back());
+        if (!mlRelativeFramePoses.empty())
+            mlRelativeFramePoses.push_back(mlRelativeFramePoses.back());
         mlpReferences.push_back(mlpReferences.back());
         mlFrameTimes.push_back(mlFrameTimes.back());
         mlbLost.push_back(mState==LOST);
     }
+
 }
 
 
@@ -561,7 +556,7 @@ void Tracking::StereoInitialization()
 
         mpMap->mvpKeyFrameOrigins.push_back(pKFini);
 
-        // mpMapDrawer->SetCurrentCameraPose(mCurrentFrame.mTcw);
+        mpMapDrawer->SetCurrentCameraPose(mCurrentFrame.mTcw);
 
         mState=OK;
     }
@@ -736,7 +731,7 @@ void Tracking::CreateInitialMapMonocular()
 
     mpMap->SetReferenceMapPoints(mvpLocalMapPoints);
 
-    // mpMapDrawer->SetCurrentCameraPose(pKFcur->GetPose());
+    mpMapDrawer->SetCurrentCameraPose(pKFcur->GetPose());
 
     mpMap->mvpKeyFrameOrigins.push_back(pKFini);
 
@@ -1498,6 +1493,7 @@ bool Tracking::Relocalization()
 
     if(!bMatch)
     {
+        mCurrentFrame.mTcw = cv::Mat::zeros(0, 0, CV_32F); // set mTcw back to empty if relocation is failed
         return false;
     }
     else
@@ -1512,12 +1508,14 @@ void Tracking::Reset()
 {
 
     cout << "System Reseting" << endl;
-    // if(mpViewer)
-    // {
-    //     mpViewer->RequestStop();
-    //     while(!mpViewer->isStopped())
-    //         usleep(3000);
-    // }
+    if(mpViewer)
+    {
+        mpViewer->RequestStop();
+        while(!mpViewer->isStopped())
+        {
+            std::this_thread::sleep_for(std::chrono::microseconds(3000));
+        }
+    }
 
     // Reset Local Mapping
     cout << "Reseting Local Mapper...";
@@ -1552,8 +1550,8 @@ void Tracking::Reset()
     mlFrameTimes.clear();
     mlbLost.clear();
 
-    // if(mpViewer)
-    //     mpViewer->Release();
+    if(mpViewer)
+        mpViewer->Release();
 }
 
 void Tracking::ChangeCalibration(const string &strSettingPath)
@@ -1594,9 +1592,6 @@ void Tracking::InformOnlyTracking(const bool &flag)
     mbOnlyTracking = flag;
 }
 
-cv::Mat Tracking::getvel(){  //added to use for Kalman filter by EungChang
-    return mVelocity;
-}
 
 
 } //namespace ORB_SLAM

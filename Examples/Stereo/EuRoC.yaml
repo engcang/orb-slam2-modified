@@ -4,10 +4,6 @@
 # Camera Parameters. Adjust them!
 #--------------------------------------------------------------------------------------------
 
-ShowTrack: 1 # show image
-fisheye : 1
-fisheye_mask : "/home/mason/fisheye_mask.png"
-
 # Camera calibration and distortion parameters (OpenCV) 
 Camera.fx: 435.2046959714599
 Camera.fy: 435.2046959714599
@@ -38,14 +34,13 @@ ThDepth: 35
 # Stereo Rectification. Only if you need to pre-rectify the images.
 # Camera.fx, .fy, etc must be the same as in LEFT.P
 #--------------------------------------------------------------------------------------------
-Rectification : 1
 LEFT.height: 480
 LEFT.width: 752
 LEFT.D: !!opencv-matrix
    rows: 1
    cols: 5
    dt: d
-   data: [-0.28340811, 0.07395907, 0.00019359, 1.76187114e-05, 0.0]
+   data:[-0.28340811, 0.07395907, 0.00019359, 1.76187114e-05, 0.0]
 LEFT.K: !!opencv-matrix
    rows: 3
    cols: 3
@@ -96,7 +91,7 @@ ORBextractor.nFeatures: 1200
 ORBextractor.scaleFactor: 1.2
 
 # ORB Extractor: Number of levels in the scale pyramid	
-ORBextractor.nLevels: 12
+ORBextractor.nLevels: 8
 
 # ORB Extractor: Fast threshold
 # Image is divided in a grid. At each cell FAST are extracted imposing a minimum response.
@@ -104,4 +99,18 @@ ORBextractor.nLevels: 12
 # You can lower these values if your images have low contrast			
 ORBextractor.iniThFAST: 20
 ORBextractor.minThFAST: 7
+
+#--------------------------------------------------------------------------------------------
+# Viewer Parameters
+#--------------------------------------------------------------------------------------------
+Viewer.KeyFrameSize: 0.05
+Viewer.KeyFrameLineWidth: 1
+Viewer.GraphLineWidth: 0.9
+Viewer.PointSize:2
+Viewer.CameraSize: 0.08
+Viewer.CameraLineWidth: 3
+Viewer.ViewpointX: 0
+Viewer.ViewpointY: -0.7
+Viewer.ViewpointZ: -1.8
+Viewer.ViewpointF: 500
 

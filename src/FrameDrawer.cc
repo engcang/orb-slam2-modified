@@ -29,9 +29,12 @@
 namespace ORB_SLAM2
 {
 
-FrameDrawer::FrameDrawer(Map* pMap):mpMap(pMap)
+FrameDrawer::FrameDrawer(Map* pMap, bool bReuseMap):mpMap(pMap)
 {
-    mState=Tracking::SYSTEM_NOT_READY;
+    if (bReuseMap)
+        mState=Tracking::LOST;
+    else
+        mState=Tracking::SYSTEM_NOT_READY;
     mIm = cv::Mat(480,640,CV_8UC3, cv::Scalar(0,0,0));
 }
 
@@ -73,6 +76,7 @@ cv::Mat FrameDrawer::DrawFrame()
 
     if(im.channels()<3) //this should be always true
         cvtColor(im,im,CV_GRAY2BGR);
+
     //Draw
     if(state==Tracking::NOT_INITIALIZED) //INITIALIZING
     {
@@ -120,6 +124,7 @@ cv::Mat FrameDrawer::DrawFrame()
 
     cv::Mat imWithInfo;
     DrawTextInfo(im,state, imWithInfo);
+
     return imWithInfo;
 }
 

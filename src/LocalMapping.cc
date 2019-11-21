@@ -47,14 +47,6 @@ void LocalMapping::SetTracker(Tracking *pTracker)
 void LocalMapping::Run()
 {
 
-    //ryu - CPU affinity
-    unsigned long mask = 240; //(b1111 0000)
-    if(pthread_setaffinity_np(pthread_self(),sizeof(mask),(cpu_set_t*)&mask) < 0){
-        std::cout << "setaffinity_np error" << std::endl;
-        //abort();
-    }
-    else {std::cout << "cpu : " << sched_getcpu() << std::endl;}
-    
     mbFinished = false;
 
     while(1)
@@ -99,7 +91,7 @@ void LocalMapping::Run()
             // Safe area to stop
             while(isStopped() && !CheckFinish())
             {
-                usleep(3000);
+                std::this_thread::sleep_for(std::chrono::microseconds(3000));
             }
             if(CheckFinish())
                 break;
@@ -113,7 +105,7 @@ void LocalMapping::Run()
         if(CheckFinish())
             break;
 
-        usleep(3000);
+        std::this_thread::sleep_for(std::chrono::microseconds(3000));
     }
 
     SetFinish();
@@ -724,7 +716,7 @@ void LocalMapping::RequestReset()
             if(!mbResetRequested)
                 break;
         }
-        usleep(3000);
+        std::this_thread::sleep_for(std::chrono::microseconds(3000));
     }
 }
 

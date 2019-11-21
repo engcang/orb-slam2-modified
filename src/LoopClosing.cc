@@ -56,14 +56,6 @@ void LoopClosing::SetLocalMapper(LocalMapping *pLocalMapper)
 
 void LoopClosing::Run()
 {
-    //ryu - CPU affinity
-    unsigned long mask = 240; //(b1111 0000)
-    if(pthread_setaffinity_np(pthread_self(),sizeof(mask),(cpu_set_t*)&mask) < 0){
-        std::cout << "setaffinity_np error" << std::endl;
-        //abort();
-    }
-    else {std::cout << "cpu : " << sched_getcpu() << std::endl;}
-    
     mbFinished =false;
 
     while(1)
@@ -82,14 +74,14 @@ void LoopClosing::Run()
                    CorrectLoop();
                }
             }
-        }       
+        }
 
         ResetIfRequested();
 
         if(CheckFinish())
             break;
 
-        usleep(5000);
+        std::this_thread::sleep_for(std::chrono::microseconds(5000));
     }
 
     SetFinish();
@@ -433,7 +425,7 @@ void LoopClosing::CorrectLoop()
     // Wait until Local Mapping has effectively stopped
     while(!mpLocalMapper->isStopped())
     {
-        usleep(1000);
+        std::this_thread::sleep_for(std::chrono::microseconds(1000));
     }
 
     // Ensure current keyframe is updated
@@ -635,7 +627,7 @@ void LoopClosing::RequestReset()
         if(!mbResetRequested)
             break;
         }
-        usleep(5000);
+        std::this_thread::sleep_for(std::chrono::microseconds(5000));
     }
 }
 
@@ -675,7 +667,7 @@ void LoopClosing::RunGlobalBundleAdjustment(unsigned long nLoopKF)
 
             while(!mpLocalMapper->isStopped() && !mpLocalMapper->isFinished())
             {
-                usleep(1000);
+                std::this_thread::sleep_for(std::chrono::microseconds(1000));
             }
 
             // Get Map Mutex

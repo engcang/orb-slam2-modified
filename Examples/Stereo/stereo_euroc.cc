@@ -25,22 +25,18 @@
 #include<iomanip>
 #include<chrono>
 
-#include<Eigen/Dense>
 #include<opencv2/core/core.hpp>
-#include <opencv2/core/eigen.hpp>
 
-#include"System.h"
-#include"Converter.h"
+#include<System.h>
 
 using namespace std;
 
-// void LoadImages(const string &strPathLeft, const string &strPathRight, const string &strPathTimes,
-//                 vector<string> &vstrImageLeft, vector<string> &vstrImageRight, vector<double> &vTimeStamps);
-void LoadImages(const string &strPathLeft, const string &strPathTimes, vector<string> &vstrImageLeft, vector<double> &vTimeStamps);
+void LoadImages(const string &strPathLeft, const string &strPathRight, const string &strPathTimes,
+                vector<string> &vstrImageLeft, vector<string> &vstrImageRight, vector<double> &vTimeStamps);
 
 int main(int argc, char **argv)
 {
-    if(argc != 6 && argc !=7)
+    if(argc != 6)
     {
         cerr << endl << "Usage: ./stereo_euroc path_to_vocabulary path_to_settings path_to_left_folder path_to_right_folder path_to_times_file" << endl;
         return 1;
@@ -50,10 +46,7 @@ int main(int argc, char **argv)
     vector<string> vstrImageLeft;
     vector<string> vstrImageRight;
     vector<double> vTimeStamp;
-    vector<double> vTimeStamp2;
-
-    LoadImages(string(argv[3]), string(argv[5]), vstrImageLeft, vTimeStamp);
-    LoadImages(string(argv[4]), string(argv[6]), vstrImageRight, vTimeStamp2);
+    LoadImages(string(argv[3]), string(argv[4]), string(argv[5]), vstrImageLeft, vstrImageRight, vTimeStamp);
 
     if(vstrImageLeft.empty() || vstrImageRight.empty())
     {
@@ -61,11 +54,11 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    // if(vstrImageLeft.size()!=vstrImageRight.size())
-    // {
-    //     cerr << "ERROR: Different number of left and right images." << endl;
-    //     return 1;
-    // }
+    if(vstrImageLeft.size()!=vstrImageRight.size())
+    {
+        cerr << "ERROR: Different number of left and right images." << endl;
+        return 1;
+    }
 
     // Read rectification parameters
     cv::FileStorage fsSettings(argv[2], cv::FileStorage::READ);
@@ -74,45 +67,41 @@ int main(int argc, char **argv)
         cerr << "ERROR: Wrong path to settings" << endl;
         return -1;
     }
-    
-    bool Rectification;
-    cv::Mat K_l, K_r, P_l, P_r, R_l, R_r, D_l, D_r, M1l,M2l,M1r,M2r;
-    fsSettings["Rectification"] >> Rectification;
-    if(Rectification){
-        fsSettings["LEFT.K"] >> K_l;
-        fsSettings["RIGHT.K"] >> K_r;
 
-        fsSettings["LEFT.P"] >> P_l;
-        fsSettings["RIGHT.P"] >> P_r;
+    cv::Mat K_l, K_r, P_l, P_r, R_l, R_r, D_l, D_r;
+    fsSettings["LEFT.K"] >> K_l;
+    fsSettings["RIGHT.K"] >> K_r;
 
-        fsSettings["LEFT.R"] >> R_l;
-        fsSettings["RIGHT.R"] >> R_r;
+    fsSettings["LEFT.P"] >> P_l;
+    fsSettings["RIGHT.P"] >> P_r;
 
-        fsSettings["LEFT.D"] >> D_l;
-        fsSettings["RIGHT.D"] >> D_r;
+    fsSettings["LEFT.R"] >> R_l;
+    fsSettings["RIGHT.R"] >> R_r;
 
-        int rows_l = fsSettings["LEFT.height"];
-        int cols_l = fsSettings["LEFT.width"];
-        int rows_r = fsSettings["RIGHT.height"];
-        int cols_r = fsSettings["RIGHT.width"];
+    fsSettings["LEFT.D"] >> D_l;
+    fsSettings["RIGHT.D"] >> D_r;
 
-        if(K_l.empty() || K_r.empty() || P_l.empty() || P_r.empty() || R_l.empty() || R_r.empty() || D_l.empty() || D_r.empty() ||
-                rows_l==0 || rows_r==0 || cols_l==0 || cols_r==0)
-        {
-            cerr << "ERROR: Calibration parameters to rectify stereo are missing!" << endl;
-            return -1;
-        }
+    int rows_l = fsSettings["LEFT.height"];
+    int cols_l = fsSettings["LEFT.width"];
+    int rows_r = fsSettings["RIGHT.height"];
+    int cols_r = fsSettings["RIGHT.width"];
 
-        cv::initUndistortRectifyMap(K_l,D_l,R_l,P_l.rowRange(0,3).colRange(0,3),cv::Size(cols_l,rows_l),CV_32F,M1l,M2l);
-        cv::initUndistortRectifyMap(K_r,D_r,R_r,P_r.rowRange(0,3).colRange(0,3),cv::Size(cols_r,rows_r),CV_32F,M1r,M2r);
+    if(K_l.empty() || K_r.empty() || P_l.empty() || P_r.empty() || R_l.empty() || R_r.empty() || D_l.empty() || D_r.empty() ||
+            rows_l==0 || rows_r==0 || cols_l==0 || cols_r==0)
+    {
+        cerr << "ERROR: Calibration parameters to rectify stereo are missing!" << endl;
+        return -1;
     }
 
+    cv::Mat M1l,M2l,M1r,M2r;
+    cv::initUndistortRectifyMap(K_l,D_l,R_l,P_l.rowRange(0,3).colRange(0,3),cv::Size(cols_l,rows_l),CV_32F,M1l,M2l);
+    cv::initUndistortRectifyMap(K_r,D_r,R_r,P_r.rowRange(0,3).colRange(0,3),cv::Size(cols_r,rows_r),CV_32F,M1r,M2r);
 
-    const int nImages = (vstrImageLeft.size()>vstrImageRight.size())?vstrImageRight.size():vstrImageLeft.size();
+
+    const int nImages = vstrImageLeft.size();
 
     // Create SLAM system. It initializes all system threads and gets ready to process frames.
-    // ORB_SLAM2::System SLAM(argv[1],argv[2],ORB_SLAM2::System::STEREO,true);
-    ORB_SLAM2::System SLAM(argv[1],argv[2],ORB_SLAM2::System::STEREO); //viewer removed
+    ORB_SLAM2::System SLAM(argv[1],argv[2],ORB_SLAM2::System::STEREO,true);
 
     // Vector for tracking time statistics
     vector<float> vTimesTrack;
@@ -123,18 +112,7 @@ int main(int argc, char **argv)
     cout << "Images in the sequence: " << nImages << endl << endl;
 
     // Main loop
-    cv::Mat imLeft, imRight, imLeftRect, imRightRect, masked_left, masked_right;
-    cv::Mat Tcw;
-
-    int ShowTrack = fsSettings["ShowTrack"]; // viewer removed
-    int fisheye = fsSettings["fisheye"]; // fisheye added by EungChang
-    cv::Mat mask;
-    if (fisheye)
-        {
-            mask = cv::imread(fsSettings["fisheye_mask"],0);
-         // cv::resize(mask, mask, cv::Size(752, 480));
-        }
-
+    cv::Mat imLeft, imRight, imLeftRect, imRightRect;
     for(int ni=0; ni<nImages; ni++)
     {
         // Read left and right images from file
@@ -155,9 +133,9 @@ int main(int argc, char **argv)
             return 1;
         }
 
-        if(Rectification){
-            cv::remap(imLeft,imLeftRect,M1l,M2l,cv::INTER_LINEAR);
-            cv::remap(imRight,imRightRect,M1r,M2r,cv::INTER_LINEAR);}
+        cv::remap(imLeft,imLeftRect,M1l,M2l,cv::INTER_LINEAR);
+        cv::remap(imRight,imRightRect,M1r,M2r,cv::INTER_LINEAR);
+
         double tframe = vTimeStamp[ni];
 
 
@@ -168,45 +146,7 @@ int main(int argc, char **argv)
 #endif
 
         // Pass the images to the SLAM system
-        if(Rectification){
-            if (fisheye)
-            {
-                imLeftRect.copyTo(masked_left,mask);
-                imRightRect.copyTo(masked_right,mask);
-                Tcw = SLAM.TrackStereo(masked_left,masked_right,tframe);
-            }
-            else
-                Tcw = SLAM.TrackStereo(imLeftRect,imRightRect,tframe);
-        }
-        else{
-            if (fisheye)
-            {
-                imLeft.copyTo(masked_left,mask);
-                imRight.copyTo(masked_right,mask);
-                Tcw = SLAM.TrackStereo(masked_left,masked_right,tframe);
-            }
-            else
-                Tcw = SLAM.TrackStereo(imLeft,imRight,tframe);
-            
-        }
-
-        if (Tcw.size().height>0 && Tcw.size().width >0){
-            cv::Mat rotation(3,3,CV_32F);
-            cv::Mat translation(3,1,CV_32F);
-
-            rotation = Tcw.rowRange(0,3).colRange(0,3).t();
-            translation = -rotation*Tcw.rowRange(0,3).col(3);
-            vector<float> q = ORB_SLAM2::Converter::toQuaternion(rotation);
-
-            cout << "E,D,N " << translation.at<float>(0) << " " << translation.at<float>(1) << " " << translation.at<float>(2) << " " << q[0] << " " << q[1] << " " << q[2] << " " << q[3] << endl; }
-
-        if(ShowTrack) // Extracted from viewer
-        {   cv::namedWindow("ORB-SLAM2: Current Frame");
-            cv::Mat im = SLAM.getimage();
-            cv::imshow("ORB-SLAM2: Current Frame",im);
-            cv::waitKey(1);}
-            cv::Mat vel = SLAM.getvel();
-            // cout << vel << endl;
+        SLAM.TrackStereo(imLeftRect,imRightRect,tframe);
 
 #ifdef COMPILEDWITHC11
         std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
@@ -226,7 +166,7 @@ int main(int argc, char **argv)
             T = tframe-vTimeStamp[ni-1];
 
         if(ttrack<T)
-            usleep((T-ttrack)*1e6);
+            std::this_thread::sleep_for(std::chrono::microseconds(static_cast<size_t>((T-ttrack)*1e6)));
     }
 
     // Stop all threads
@@ -249,15 +189,14 @@ int main(int argc, char **argv)
     return 0;
 }
 
-//void LoadImages(const string &strPathLeft, const string &strPathRight, const string &strPathTimes,
-                //vector<string> &vstrImageLeft, vector<string> &vstrImageRight, vector<double> &vTimeStamps)
-void LoadImages(const string &strPathLeft, const string &strPathTimes,
-                vector<string> &vstrImageLeft, vector<double> &vTimeStamps)
+void LoadImages(const string &strPathLeft, const string &strPathRight, const string &strPathTimes,
+                vector<string> &vstrImageLeft, vector<string> &vstrImageRight, vector<double> &vTimeStamps)
 {
     ifstream fTimes;
     fTimes.open(strPathTimes.c_str());
     vTimeStamps.reserve(5000);
     vstrImageLeft.reserve(5000);
+    vstrImageRight.reserve(5000);
     while(!fTimes.eof())
     {
         string s;
@@ -267,9 +206,11 @@ void LoadImages(const string &strPathLeft, const string &strPathTimes,
             stringstream ss;
             ss << s;
             vstrImageLeft.push_back(strPathLeft + "/" + ss.str() + ".png");
+            vstrImageRight.push_back(strPathRight + "/" + ss.str() + ".png");
             double t;
             ss >> t;
             vTimeStamps.push_back(t/1e9);
+
         }
     }
 }

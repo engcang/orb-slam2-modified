@@ -28,18 +28,22 @@
 
 #include "Tracking.h"
 #include "FrameDrawer.h"
+#include "MapDrawer.h"
 #include "Map.h"
 #include "LocalMapping.h"
 #include "LoopClosing.h"
 #include "KeyFrameDatabase.h"
 #include "ORBVocabulary.h"
-// #include "Viewer.h"
-#include <unistd.h> // added for 18.04, usleep
+#include "Viewer.h"
+
+#include "BoostArchiver.h"
+// for map file io
+#include <fstream>
 
 namespace ORB_SLAM2
 {
 
-// class Viewer;
+class Viewer;
 class FrameDrawer;
 class Map;
 class Tracking;
@@ -59,8 +63,7 @@ public:
 public:
 
     // Initialize the SLAM system. It launches the Local Mapping, Loop Closing and Viewer threads.
-    // System(const string &strVocFile, const string &strSettingsFile, const eSensor sensor, const bool bUseViewer = true);
-    System(const string &strVocFile, const string &strSettingsFile, const eSensor sensor);
+    System(const string &strVocFile, const string &strSettingsFile, const eSensor sensor, const bool bUseViewer = true, bool is_save_map_=false);
 
     // Proccess the given stereo frame. Images must be synchronized and rectified.
     // Input images: RGB (CV_8UC3) or grayscale (CV_8U). RGB is converted to grayscale.
@@ -112,20 +115,17 @@ public:
     // Call first Shutdown()
     // See format details at: http://www.cvlibs.net/datasets/kitti/eval_odometry.php
     void SaveTrajectoryKITTI(const string &filename);
-
-    // TODO: Save/Load functions
-    // SaveMap(const string &filename);
-    // LoadMap(const string &filename);
-
     // Information from most recent processed frame
     // You can call this right after TrackMonocular (or stereo or RGBD)
     int GetTrackingState();
     std::vector<MapPoint*> GetTrackedMapPoints();
     std::vector<cv::KeyPoint> GetTrackedKeyPointsUn();
 
-    cv::Mat getimage(); //added to remove viewer by EungChang
-    cv::Mat getvel(); // added to use for Kalman filter by EungChang
-    
+private:
+    // Save/Load functions
+    void SaveMap(const string &filename);
+    bool LoadMap(const string &filename);
+
 private:
 
     // Input sensor
@@ -140,6 +140,9 @@ private:
     // Map structure that stores the pointers to all KeyFrames and MapPoints.
     Map* mpMap;
 
+    string mapfile;
+    bool is_save_map;
+
     // Tracker. It receives a frame and computes the associated camera pose.
     // It also decides when to insert a new keyframe, create some new MapPoints and
     // performs relocalization if tracking fails.
@@ -153,16 +156,16 @@ private:
     LoopClosing* mpLoopCloser;
 
     // The viewer draws the map and the current camera pose. It uses Pangolin.
-    // Viewer* mpViewer;
+    Viewer* mpViewer;
 
     FrameDrawer* mpFrameDrawer;
-    // MapDrawer* mpMapDrawer;
+    MapDrawer* mpMapDrawer;
 
     // System threads: Local Mapping, Loop Closing, Viewer.
     // The Tracking thread "lives" in the main execution thread that creates the System object.
     std::thread* mptLocalMapping;
     std::thread* mptLoopClosing;
-    // std::thread* mptViewer;
+    std::thread* mptViewer;
 
     // Reset flag
     std::mutex mMutexReset;
