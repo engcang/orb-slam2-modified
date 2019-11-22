@@ -25,16 +25,17 @@
 #include<string>
 #include<thread>
 #include<opencv2/core/core.hpp>
+#include <unistd.h> // added for 18.04, to use usleep
 
 #include "Tracking.h"
 #include "FrameDrawer.h"
-#include "MapDrawer.h"
+// #include "MapDrawer.h"
 #include "Map.h"
 #include "LocalMapping.h"
 #include "LoopClosing.h"
 #include "KeyFrameDatabase.h"
 #include "ORBVocabulary.h"
-#include "Viewer.h"
+// #include "Viewer.h"
 
 #include "BoostArchiver.h"
 // for map file io
@@ -43,7 +44,7 @@
 namespace ORB_SLAM2
 {
 
-class Viewer;
+// class Viewer;
 class FrameDrawer;
 class Map;
 class Tracking;
@@ -63,7 +64,8 @@ public:
 public:
 
     // Initialize the SLAM system. It launches the Local Mapping, Loop Closing and Viewer threads.
-    System(const string &strVocFile, const string &strSettingsFile, const eSensor sensor, const bool bUseViewer = true, bool is_save_map_=false);
+    // System(const string &strVocFile, const string &strSettingsFile, const eSensor sensor, const bool bUseViewer = true, bool is_save_map_=false);
+    System(const string &strVocFile, const string &strSettingsFile, const eSensor sensor, bool is_save_map_=false);
 
     // Proccess the given stereo frame. Images must be synchronized and rectified.
     // Input images: RGB (CV_8UC3) or grayscale (CV_8U). RGB is converted to grayscale.
@@ -121,6 +123,9 @@ public:
     std::vector<MapPoint*> GetTrackedMapPoints();
     std::vector<cv::KeyPoint> GetTrackedKeyPointsUn();
 
+    cv::Mat getimage(); //added
+
+
 private:
     // Save/Load functions
     void SaveMap(const string &filename);
@@ -156,16 +161,16 @@ private:
     LoopClosing* mpLoopCloser;
 
     // The viewer draws the map and the current camera pose. It uses Pangolin.
-    Viewer* mpViewer;
+    // Viewer* mpViewer;
 
     FrameDrawer* mpFrameDrawer;
-    MapDrawer* mpMapDrawer;
+    // MapDrawer* mpMapDrawer;
 
     // System threads: Local Mapping, Loop Closing, Viewer.
     // The Tracking thread "lives" in the main execution thread that creates the System object.
     std::thread* mptLocalMapping;
     std::thread* mptLoopClosing;
-    std::thread* mptViewer;
+    // std::thread* mptViewer;
 
     // Reset flag
     std::mutex mMutexReset;

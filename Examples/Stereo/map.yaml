@@ -3,17 +3,28 @@
 #--------------------------------------------------------------------------------------------
 # Camera Parameters. Adjust them!
 #--------------------------------------------------------------------------------------------
+ShowTrack: 1
 
 # Camera calibration and distortion parameters (OpenCV) 
-Camera.fx: 284.27321
-Camera.fy: 284.31745
-Camera.cx: 311.57979
-Camera.cy: 181.34437
+#Camera.fx: 284.27321
+#Camera.fy: 284.31745
+#Camera.cx: 311.57979
+#Camera.cy: 181.34437
 
-Camera.k1: -0.284117826
-Camera.k2: 0.082992528
-Camera.p1: -0.000205393
-Camera.p2: 0.0004910328
+#Camera.k1: -0.284117826
+#Camera.k2: 0.082992528
+#Camera.p1: -0.000205393
+#Camera.p2: 0.0004910328
+
+Camera.fx: 248.921182
+Camera.fy: 248.921182
+Camera.cx: 326.982685
+Camera.cy: 186.208534
+
+Camera.k1: 0.0
+Camera.k2: 0.0
+Camera.p1: 0.0
+Camera.p2: 0.0
 
 Camera.width: 600 #750 #1200
 Camera.height: 360 #450 #720
@@ -22,13 +33,68 @@ Camera.height: 360 #450 #720
 Camera.fps: 0.0
 
 # stereo baseline times fx #22.86cm
-Camera.bf: 64.58602 #66.43335 #78.29 #130.8
+#Camera.bf: 64.58602 #66.43335 #78.29 #130.8
+Camera.bf: 56.754029496
 
 # Color order of the images (0: BGR, 1: RGB. It is ignored if images are grayscale)
 Camera.RGB: 0
 
 # Close/Far threshold. Baseline times.
 ThDepth: 45
+
+
+#--------------------------------------------------------------------------------------------
+# Stereo Rectification. Only if you need to pre-rectify the images.
+# Camera.fx, .fy, etc must be the same as in LEFT.P
+#--------------------------------------------------------------------------------------------
+Rectification: 1
+
+LEFT.height: 360
+LEFT.width: 600
+LEFT.D: !!opencv-matrix
+   rows: 1
+   cols: 5
+   dt: d
+   data: [-0.260073, 0.058680, 0.000026, 0.000124, 0.000000]
+LEFT.K: !!opencv-matrix
+   rows: 3
+   cols: 3
+   dt: d
+   data: [280.897012, 0.0, 313.766439, 0.0, 281.041049, 184.788040, 0.0, 0.0, 1.0]
+LEFT.R:  !!opencv-matrix
+   rows: 3
+   cols: 3
+   dt: d
+   data: [0.999998, 0.000769, -0.002006, -0.000765, 0.999998, 0.001717, 0.002007, -0.001715, 0.999997]
+LEFT.P:  !!opencv-matrix
+   rows: 3
+   cols: 4
+   dt: d
+   data: [248.921182, 0.000000, 326.982685, 0.000000, 0.000000, 248.921182, 186.208534, 0.000000, 0.000000, 0.000000, 1.000000, 0.000000]
+
+RIGHT.height: 360
+RIGHT.width: 600
+RIGHT.D: !!opencv-matrix
+   rows: 1
+   cols: 5
+   dt: d
+   data: [-0.244199, 0.048198, 0.000664, -0.000188, 0.000000]
+RIGHT.K: !!opencv-matrix
+   rows: 3
+   cols: 3
+   dt: d
+   data: [280.852013, 0.000000, 301.109841, 0.000000, 281.360246, 184.036540, 0.000000, 0.000000, 1.000000]
+RIGHT.R:  !!opencv-matrix
+   rows: 3
+   cols: 3
+   dt: d
+   data: [0.999237, -0.001509, -0.039024, 0.001443, 0.999997, -0.001737, 0.039027, 0.001680, 0.999237]
+RIGHT.P:  !!opencv-matrix
+   rows: 3
+   cols: 4
+   dt: d
+   data: [248.921182, 0.000000, 326.982685, -56.927628, 0.000000, 248.921182, 186.208534, 0.000000, 0.000000, 0.000000, 1.000000, 0.000000]
+
 
 #--------------------------------------------------------------------------------------------
 # ORB Parameters
@@ -51,20 +117,6 @@ ORBextractor.iniThFAST: 20
 ORBextractor.minThFAST: 7
 
 #--------------------------------------------------------------------------------------------
-# Viewer Parameters
-#--------------------------------------------------------------------------------------------
-Viewer.KeyFrameSize: 0.05
-Viewer.KeyFrameLineWidth: 1
-Viewer.GraphLineWidth: 0.9
-Viewer.PointSize:2
-Viewer.CameraSize: 0.08
-Viewer.CameraLineWidth: 3
-Viewer.ViewpointX: 0
-Viewer.ViewpointY: -0.7
-Viewer.ViewpointZ: -1.8
-Viewer.ViewpointF: 500
-
-#--------------------------------------------------------------------------------------------
 # Map Parapeters
 #--------------------------------------------------------------------------------------------
-Map.mapfile: map.bin
+Map.mapfile: maptest.bin

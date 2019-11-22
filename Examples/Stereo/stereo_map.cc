@@ -111,7 +111,8 @@ int main(int argc, char **argv)
     const int nImages = (vstrImageLeft.size()>vstrImageRight.size())?vstrImageRight.size():vstrImageLeft.size();
 
     // Create SLAM system. It initializes all system threads and gets ready to process frames.
-    ORB_SLAM2::System SLAM(argv[1],argv[2],ORB_SLAM2::System::STEREO, true, (bool)atoi(argv[7]));
+    // ORB_SLAM2::System SLAM(argv[1],argv[2],ORB_SLAM2::System::STEREO, true, (bool)atoi(argv[7]));
+    ORB_SLAM2::System SLAM(argv[1],argv[2],ORB_SLAM2::System::STEREO, (bool)atoi(argv[7]));
 
     // Vector for tracking time statistics
     vector<float> vTimesTrack;
@@ -212,11 +213,11 @@ int main(int argc, char **argv)
 
 //		translation = cam2body*translation;
             cout << "E,D,N " << translation.at<float>(0) << " " << translation.at<float>(1) << " " << translation.at<float>(2) << " " << q[0] << " " << q[1] << " " << q[2] << " " << q[3] << endl; }
-        /*if(ShowTrack) // Extracted from viewer
+        if(ShowTrack) // Extracted from viewer
         {   cv::namedWindow("ORB-SLAM2: Current Frame");
             cv::Mat im = SLAM.getimage();
             cv::imshow("ORB-SLAM2: Current Frame",im);
-            cv::waitKey(1);}*/
+            cv::waitKey(1);}
             //cv::Mat vel = SLAM.getvel();
 
 
