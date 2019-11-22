@@ -25,7 +25,6 @@
 #include<string>
 #include<thread>
 #include<opencv2/core/core.hpp>
-#include <unistd.h> // added for 18.04, to use usleep
 
 #include "Tracking.h"
 #include "FrameDrawer.h"
